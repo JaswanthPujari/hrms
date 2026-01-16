@@ -61,7 +61,8 @@ export default function PayrollManagement() {
   };
 
   const handleAssignPayroll = async (e) => {
-    e.preventDefault();\n    try {
+    e.preventDefault();
+    try {
       await api.post('/payroll', {
         ...payrollForm,
         basic_salary: parseFloat(payrollForm.basic_salary),
