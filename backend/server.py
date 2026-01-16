@@ -217,6 +217,15 @@ async def register(user_data: UserCreate):
     
     await db.users.insert_one(user_dict)
     
+    # If user is employee, link to existing employee record if it exists
+    if user.role == "employee":
+        employee_record = await db.employees.find_one({"email": user_data.email}, {"_id": 0})
+        if employee_record:
+            await db.employees.update_one(
+                {"email": user_data.email},
+                {"$set": {"user_id": user.id}}
+            )
+    
     # Create token
     access_token = create_access_token(data={"sub": user.id, "role": user.role})
     return Token(access_token=access_token, token_type="bearer", user=user)
