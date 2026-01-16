@@ -52,9 +52,9 @@ export default function EmployeeManagement() {
     try {
       await api.post('/employees', formData);
       toast.success('Employee added and invitation sent!');
-      setOpen(false);
       setFormData({ name: '', email: '', department: '', joining_date: '' });
       fetchEmployees();
+      setOpen(false);
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed to add employee');
     }
