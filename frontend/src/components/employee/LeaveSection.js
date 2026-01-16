@@ -69,9 +69,9 @@ export default function LeaveSection() {
     try {
       await api.post('/leave-requests', formData);
       toast.success('Leave request submitted!');
-      setApplyDialog(false);
       setFormData({ leave_policy_id: '', start_date: '', end_date: '', reason: '' });
       fetchData();
+      setApplyDialog(false);
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed to apply for leave');
     }
