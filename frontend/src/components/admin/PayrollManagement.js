@@ -61,8 +61,7 @@ export default function PayrollManagement() {
   };
 
   const handleAssignPayroll = async (e) => {
-    e.preventDefault();
-    try {
+    e.preventDefault();\n    try {
       await api.post('/payroll', {
         ...payrollForm,
         basic_salary: parseFloat(payrollForm.basic_salary),
@@ -70,8 +69,8 @@ export default function PayrollManagement() {
         deductions: parseFloat(payrollForm.deductions) || 0,
       });
       toast.success('Payroll assigned successfully!');
-      setPayrollDialog(false);
       setPayrollForm({ employee_id: '', basic_salary: '', allowances: '', deductions: '' });
+      setPayrollDialog(false);
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed to assign payroll');
     }
@@ -82,8 +81,8 @@ export default function PayrollManagement() {
     try {
       await api.post('/payslips/generate', payslipForm);
       toast.success('Payslip generated successfully!');
-      setPayslipDialog(false);
       setPayslipForm({ employee_id: '', month: '' });
+      setPayslipDialog(false);
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed to generate payslip');
     }
