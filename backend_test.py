@@ -129,9 +129,10 @@ class HRAPITester:
 
     def test_create_employee(self):
         """Test creating employee"""
+        employee_email = f"john_{datetime.now().strftime('%H%M%S')}@company.com"
         employee_data = {
             "name": "John Doe",
-            "email": f"john_{datetime.now().strftime('%H%M%S')}@company.com",
+            "email": employee_email,
             "department": "Engineering",
             "joining_date": "2024-01-15"
         }
@@ -139,6 +140,7 @@ class HRAPITester:
         success, response, status = self.make_request('POST', '/employees', employee_data, self.admin_token, expect_status=200)
         if success and 'id' in response:
             self.test_employee_id = response['id']
+            self.test_employee_email = employee_email  # Store for employee registration
             self.log_test("Create Employee", True)
             return True
         else:
