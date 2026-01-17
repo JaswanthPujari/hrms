@@ -563,20 +563,37 @@ class HRAPITester:
             return False
 
     def run_all_tests(self):
-        """Run comprehensive test suite"""
-        print("🚀 Starting HR Management System Backend API Tests")
-        print("=" * 60)
+        """Run comprehensive test suite including NEW FEATURES"""
+        print("🚀 Starting HR Management System Backend API Tests - UPDATED WITH NEW FEATURES")
+        print("=" * 80)
         
         # Authentication Tests
         print("\n📋 Authentication Tests")
         if not self.test_admin_registration():
             return False
         
-        # Employee Management Tests (create employee first)
-        print("\n👥 Employee Management Tests")
-        self.test_create_employee()
+        # NEW: Department Management Tests (run first as employees need departments)
+        print("\n🏢 Department Management Tests (NEW)")
+        self.test_create_department()
+        self.test_list_departments()
+        
+        # Employee Management Tests (updated to use department_id)
+        print("\n👥 Employee Management Tests (UPDATED)")
+        self.test_create_employee()  # Now uses department_id
         self.test_list_employees()
         self.test_get_employee()
+        
+        # NEW: Employee Update Tests
+        print("\n✏️ Employee Update Tests (NEW)")
+        self.test_update_employee()
+        
+        # NEW: Organizational Tree Tests
+        print("\n🌳 Organizational Tree Tests (NEW)")
+        self.test_get_org_tree()
+        
+        # NEW: Backward Compatibility Tests
+        print("\n🔄 Backward Compatibility Tests (NEW)")
+        self.test_backward_compatibility_employee_department()
         
         # Now test employee registration linking to existing record
         print("\n🔗 Employee Registration Linking Test")
@@ -586,26 +603,45 @@ class HRAPITester:
         self.test_login()
         self.test_get_current_user()
         
-        # Payroll Management Tests
-        print("\n💰 Payroll Management Tests")
-        self.test_assign_payroll()
+        # NEW: Payroll Structure Management Tests
+        print("\n🏗️ Payroll Structure Management Tests (NEW)")
+        self.test_create_payroll_structure()
+        self.test_list_payroll_structures()
+        
+        # Payroll Management Tests (updated to use structures)
+        print("\n💰 Payroll Management Tests (UPDATED)")
+        self.test_assign_payroll_with_structure()  # NEW: Uses structure ID
         self.test_get_payroll()
         self.test_generate_payslip()
         self.test_get_employee_payslips()
         self.test_download_payslip()
         
-        # Leave Management Tests
-        print("\n📅 Leave Management Tests")
-        self.test_create_leave_policy()
+        # Leave Management Tests (updated with assignments)
+        print("\n📅 Leave Management Tests (UPDATED)")
+        self.test_create_leave_policy_with_description()  # NEW: With description field
         self.test_list_leave_policies()
+        
+        # NEW: Leave Assignment System Tests
+        print("\n📋 Leave Assignment System Tests (NEW)")
+        self.test_create_leave_assignment()
+        self.test_get_employee_leave_assignments()
+        
+        # Leave Request Tests (updated to work with assignments)
+        print("\n📝 Leave Request Tests (UPDATED)")
         self.test_create_leave_request()
         self.test_list_leave_requests()
         self.test_update_leave_request()
-        self.test_get_leave_balance()
+        
+        # NEW: Leave Balance with Assignments
+        print("\n⚖️ Leave Balance with Assignments Tests (NEW)")
+        self.test_leave_balance_with_assignments()
+        
+        # Cleanup
+        print("\n🧹 Cleanup Tests")
         self.test_delete_leave_policy()
         
         # Print Results
-        print("\n" + "=" * 60)
+        print("\n" + "=" * 80)
         print(f"📊 Test Results: {self.tests_passed}/{self.tests_run} passed")
         
         if self.failed_tests:
@@ -615,6 +651,17 @@ class HRAPITester:
         
         success_rate = (self.tests_passed / self.tests_run) * 100 if self.tests_run > 0 else 0
         print(f"\n✨ Success Rate: {success_rate:.1f}%")
+        
+        # Detailed breakdown
+        print(f"\n📈 NEW FEATURES TESTED:")
+        print(f"  - Department Management (Create/List)")
+        print(f"  - Employee Update (PUT endpoint)")
+        print(f"  - Organizational Tree (Hierarchy view)")
+        print(f"  - Payroll Structure System (Create/Assign)")
+        print(f"  - Leave Assignment System (Custom allocations)")
+        print(f"  - Leave Policy with Description")
+        print(f"  - Backward Compatibility (department field)")
+        print(f"  - Leave Balance with Assignments")
         
         return success_rate >= 80  # Consider 80%+ as passing
 
