@@ -26,7 +26,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Check, X, Clock, Calendar } from 'lucide-react';
+import { Plus, Check, X, Clock, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../../lib/api';
 
@@ -40,14 +40,13 @@ export default function LeaveManagement() {
   
   const [policyForm, setPolicyForm] = useState({
     name: '',
-    days_per_year: '',
     description: '',
+    leave_types: [{ type: '', days: '' }],
   });
   
   const [assignForm, setAssignForm] = useState({
     employee_id: '',
     leave_policy_id: '',
-    allocated_days: '',
   });
 
   useEffect(() => {
@@ -71,15 +70,38 @@ export default function LeaveManagement() {
     }
   };
 
+  const addLeaveType = () => {
+    setPolicyForm({
+      ...policyForm,
+      leave_types: [...policyForm.leave_types, { type: '', days: '' }],
+    });
+  };
+
+  const removeLeaveType = (index) => {
+    const newLeaveTypes = policyForm.leave_types.filter((_, i) => i !== index);
+    setPolicyForm({ ...policyForm, leave_types: newLeaveTypes });
+  };
+
+  const updateLeaveType = (index, field, value) => {
+    const newLeaveTypes = [...policyForm.leave_types];
+    newLeaveTypes[index][field] = value;
+    setPolicyForm({ ...policyForm, leave_types: newLeaveTypes });
+  };
+
   const handleCreatePolicy = async (e) => {
     e.preventDefault();
     try {
-      await api.post('/leave-policies', {
-        ...policyForm,
-        days_per_year: parseInt(policyForm.days_per_year),
-      });
+      const payload = {
+        name: policyForm.name,
+        description: policyForm.description,
+        leave_types: policyForm.leave_types.map(lt => ({
+          type: lt.type,
+          days: parseInt(lt.days)
+        }))
+      };
+      await api.post('/leave-policies', payload);
       toast.success('Leave policy created!');
-      setPolicyForm({ name: '', days_per_year: '', description: '' });
+      setPolicyForm({ name: '', description: '', leave_types: [{ type: '', days: '' }] });
       fetchData();
       setPolicyDialog(false);
     } catch (error) {
@@ -87,18 +109,15 @@ export default function LeaveManagement() {
     }
   };
 
-  const handleAssignLeave = async (e) => {
+  const handleAssignPolicy = async (e) => {
     e.preventDefault();
     try {
-      await api.post('/leave-assignments', {
-        ...assignForm,
-        allocated_days: parseInt(assignForm.allocated_days),
-      });
-      toast.success('Leave assigned successfully!');
-      setAssignForm({ employee_id: '', leave_policy_id: '', allocated_days: '' });
+      await api.post('/employee-policy-assignments', assignForm);
+      toast.success('Policy assigned successfully!');
+      setAssignForm({ employee_id: '', leave_policy_id: '' });
       setAssignDialog(false);
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Failed to assign leave');
+      toast.error(error.response?.data?.detail || 'Failed to assign policy');
     }
   };
 
@@ -126,11 +145,6 @@ export default function LeaveManagement() {
   const getEmployeeName = (employeeId) => {
     const emp = employees.find((e) => e.id === employeeId);
     return emp ? emp.name : 'Unknown';
-  };
-
-  const getPolicyName = (policyId) => {
-    const policy = policies.find((p) => p.id === policyId);
-    return policy ? policy.name : 'Unknown';
   };
 
   const getStatusIcon = (status) => {
@@ -164,58 +178,44 @@ export default function LeaveManagement() {
       <div>
         <h2 className="text-2xl font-semibold text-zinc-900">Leave Management</h2>
         <p className="text-sm text-zinc-600 mt-1">
-          Manage leave types, assign to employees, and approve requests
+          Create leave policies and assign to employees
         </p>
       </div>
 
       <Tabs defaultValue="policies" className="w-full">
         <TabsList className="grid w-full max-w-2xl grid-cols-3">
-          <TabsTrigger value="policies">Leave Types</TabsTrigger>
-          <TabsTrigger value="assign">Assign Leave</TabsTrigger>
+          <TabsTrigger value="policies">Leave Policies</TabsTrigger>
+          <TabsTrigger value="assign">Assign Policy</TabsTrigger>
           <TabsTrigger value="requests">Leave Requests</TabsTrigger>
         </TabsList>
 
-        {/* Leave Types Tab */}
+        {/* Leave Policies Tab */}
         <TabsContent value="policies" className="space-y-4">
           <div className="flex justify-end">
             <Dialog open={policyDialog} onOpenChange={setPolicyDialog}>
               <DialogTrigger asChild>
                 <Button className="bg-zinc-900 hover:bg-zinc-800" data-testid="create-policy-button">
                   <Plus className="h-4 w-4 mr-2" />
-                  Create Leave Type
+                  Create Leave Policy
                 </Button>
               </DialogTrigger>
-              <DialogContent>
+              <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
                 <DialogHeader>
-                  <DialogTitle>Create Leave Type</DialogTitle>
+                  <DialogTitle>Create Leave Policy</DialogTitle>
                   <DialogDescription>
-                    Define a new type of leave that can be assigned to employees
+                    Define a policy with multiple leave types
                   </DialogDescription>
                 </DialogHeader>
                 <form onSubmit={handleCreatePolicy} className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="policy_name">Leave Type Name</Label>
+                    <Label htmlFor="policy_name">Policy Name</Label>
                     <Input
                       id="policy_name"
                       data-testid="policy-name-input"
-                      placeholder="e.g., Casual Leave, Sick Leave"
+                      placeholder="e.g., Standard Employee Policy"
                       value={policyForm.name}
                       onChange={(e) =>
                         setPolicyForm({ ...policyForm, name: e.target.value })
-                      }
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="days_per_year">Default Days Per Year</Label>
-                    <Input
-                      id="days_per_year"
-                      data-testid="days-per-year-input"
-                      type="number"
-                      placeholder="12"
-                      value={policyForm.days_per_year}
-                      onChange={(e) =>
-                        setPolicyForm({ ...policyForm, days_per_year: e.target.value })
                       }
                       required
                     />
@@ -225,16 +225,68 @@ export default function LeaveManagement() {
                     <Textarea
                       id="description"
                       data-testid="policy-description-input"
-                      placeholder="Brief description of this leave type"
+                      placeholder="Brief description"
                       value={policyForm.description}
                       onChange={(e) =>
                         setPolicyForm({ ...policyForm, description: e.target.value })
                       }
-                      rows={3}
+                      rows={2}
                     />
                   </div>
+
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center">
+                      <Label>Leave Types</Label>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={addLeaveType}
+                        data-testid="add-leave-type-button"
+                      >
+                        <Plus className="h-3 w-3 mr-1" />
+                        Add Leave Type
+                      </Button>
+                    </div>
+
+                    {policyForm.leave_types.map((leaveType, index) => (
+                      <div key={index} className="flex gap-2 items-start p-3 border border-zinc-200 rounded-md">
+                        <div className="flex-1 space-y-2">
+                          <Input
+                            placeholder="Leave Type (e.g., Casual Leave)"
+                            value={leaveType.type}
+                            onChange={(e) => updateLeaveType(index, 'type', e.target.value)}
+                            required
+                            data-testid={`leave-type-${index}`}
+                          />
+                        </div>
+                        <div className="w-24 space-y-2">
+                          <Input
+                            type="number"
+                            placeholder="Days"
+                            value={leaveType.days}
+                            onChange={(e) => updateLeaveType(index, 'days', e.target.value)}
+                            required
+                            data-testid={`leave-days-${index}`}
+                          />
+                        </div>
+                        {policyForm.leave_types.length > 1 && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => removeLeaveType(index)}
+                            data-testid={`remove-leave-type-${index}`}
+                          >
+                            <Trash2 className="h-4 w-4 text-red-600" />
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
                   <Button type="submit" className="w-full bg-zinc-900 hover:bg-zinc-800" data-testid="submit-policy-button">
-                    Create Leave Type
+                    Create Policy
                   </Button>
                 </form>
               </DialogContent>
@@ -245,7 +297,7 @@ export default function LeaveManagement() {
             {policies.length === 0 ? (
               <Card>
                 <CardContent className="py-12 text-center">
-                  <p className="text-zinc-600">No leave types yet. Create one!</p>
+                  <p className="text-zinc-600">No leave policies yet. Create one!</p>
                 </CardContent>
               </Card>
             ) : (
@@ -253,15 +305,12 @@ export default function LeaveManagement() {
                 <Card key={policy.id} className="border-zinc-200" data-testid="policy-card">
                   <CardHeader>
                     <div className="flex justify-between items-start">
-                      <div>
+                      <div className="flex-1">
                         <CardTitle className="text-lg text-zinc-900">
                           {policy.name}
                         </CardTitle>
-                        <CardDescription className="mt-1">
-                          {policy.days_per_year} days per year (default)
-                        </CardDescription>
                         {policy.description && (
-                          <p className="text-sm text-zinc-600 mt-2">{policy.description}</p>
+                          <CardDescription className="mt-1">{policy.description}</CardDescription>
                         )}
                       </div>
                       <Button
@@ -275,37 +324,47 @@ export default function LeaveManagement() {
                       </Button>
                     </div>
                   </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium text-zinc-700">Leave Types:</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        {policy.leave_types?.map((lt, idx) => (
+                          <div key={idx} className="flex justify-between text-sm p-2 bg-zinc-50 rounded">
+                            <span className="text-zinc-700">{lt.type}</span>
+                            <span className="font-medium text-zinc-900">{lt.days} days</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </CardContent>
                 </Card>
               ))
             )}
           </div>
         </TabsContent>
 
-        {/* Assign Leave Tab */}
+        {/* Assign Policy Tab */}
         <TabsContent value="assign" className="space-y-4">
           <Card className="border-zinc-200">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-zinc-900">
-                <Calendar className="h-5 w-5" />
-                Assign Leave to Employee
-              </CardTitle>
-              <CardDescription>Allocate leave types to employees with custom days</CardDescription>
+              <CardTitle className="text-zinc-900">Assign Policy to Employee</CardTitle>
+              <CardDescription>Select an employee and assign a leave policy</CardDescription>
             </CardHeader>
             <CardContent>
               <Dialog open={assignDialog} onOpenChange={setAssignDialog}>
                 <DialogTrigger asChild>
-                  <Button className="w-full bg-zinc-900 hover:bg-zinc-800" data-testid="assign-leave-button">
-                    Assign Leave
+                  <Button className="w-full bg-zinc-900 hover:bg-zinc-800" data-testid="assign-policy-button">
+                    Assign Policy
                   </Button>
                 </DialogTrigger>
                 <DialogContent>
                   <DialogHeader>
-                    <DialogTitle>Assign Leave</DialogTitle>
+                    <DialogTitle>Assign Leave Policy</DialogTitle>
                     <DialogDescription>
-                      Select an employee and leave type, then specify allocated days
+                      Employee will get all leave types from the selected policy
                     </DialogDescription>
                   </DialogHeader>
-                  <form onSubmit={handleAssignLeave} className="space-y-4">
+                  <form onSubmit={handleAssignPolicy} className="space-y-4">
                     <div className="space-y-2">
                       <Label>Employee</Label>
                       <Select
@@ -328,50 +387,28 @@ export default function LeaveManagement() {
                       </Select>
                     </div>
                     <div className="space-y-2">
-                      <Label>Leave Type</Label>
+                      <Label>Leave Policy</Label>
                       <Select
                         value={assignForm.leave_policy_id}
-                        onValueChange={(value) => {
-                          const policy = policies.find(p => p.id === value);
-                          setAssignForm({ 
-                            ...assignForm, 
-                            leave_policy_id: value,
-                            allocated_days: policy?.days_per_year?.toString() || ''
-                          });
-                        }}
+                        onValueChange={(value) =>
+                          setAssignForm({ ...assignForm, leave_policy_id: value })
+                        }
                         required
                       >
-                        <SelectTrigger data-testid="assign-leave-type-select">
-                          <SelectValue placeholder="Select leave type" />
+                        <SelectTrigger data-testid="assign-policy-select">
+                          <SelectValue placeholder="Select policy" />
                         </SelectTrigger>
                         <SelectContent>
                           {policies.map((policy) => (
                             <SelectItem key={policy.id} value={policy.id}>
-                              {policy.name} ({policy.days_per_year} days default)
+                              {policy.name} ({policy.leave_types?.length || 0} types)
                             </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="allocated_days">Allocated Days</Label>
-                      <Input
-                        id="allocated_days"
-                        data-testid="allocated-days-input"
-                        type="number"
-                        placeholder="12"
-                        value={assignForm.allocated_days}
-                        onChange={(e) =>
-                          setAssignForm({ ...assignForm, allocated_days: e.target.value })
-                        }
-                        required
-                      />
-                      <p className="text-xs text-zinc-500">
-                        Customize the number of days for this employee
-                      </p>
-                    </div>
                     <Button type="submit" className="w-full bg-zinc-900 hover:bg-zinc-800" data-testid="submit-assign-button">
-                      Assign Leave
+                      Assign Policy
                     </Button>
                   </form>
                 </DialogContent>
@@ -399,7 +436,7 @@ export default function LeaveManagement() {
                           {getEmployeeName(request.employee_id)}
                         </CardTitle>
                         <CardDescription className="mt-1">
-                          {getPolicyName(request.leave_policy_id)}
+                          {request.leave_type}
                         </CardDescription>
                       </div>
                       <span
