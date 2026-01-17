@@ -149,31 +149,33 @@ class PayslipCreate(BaseModel):
     employee_id: str
     month: str
 
+class LeaveType(BaseModel):
+    type: str  # e.g., "Casual Leave"
+    days: int  # e.g., 12
+
 class LeavePolicy(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    name: str
-    days_per_year: int
+    name: str  # e.g., "Standard Employee Policy"
+    leave_types: List[LeaveType]  # Multiple leave types in one policy
     description: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class LeavePolicyCreate(BaseModel):
     name: str
-    days_per_year: int
+    leave_types: List[LeaveType]
     description: Optional[str] = None
 
-class LeaveAssignment(BaseModel):
+class EmployeePolicyAssignment(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     employee_id: str
     leave_policy_id: str
-    allocated_days: int
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-class LeaveAssignmentCreate(BaseModel):
+class EmployeePolicyAssignmentCreate(BaseModel):
     employee_id: str
     leave_policy_id: str
-    allocated_days: int
 
 class LeaveRequest(BaseModel):
     model_config = ConfigDict(extra="ignore")
