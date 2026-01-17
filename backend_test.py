@@ -671,10 +671,11 @@ class HRAPITester:
         print(f"  - Employee Update (PUT endpoint)")
         print(f"  - Organizational Tree (Hierarchy view)")
         print(f"  - Payroll Structure System (Create/Assign)")
-        print(f"  - Leave Assignment System (Custom allocations)")
-        print(f"  - Leave Policy with Description")
+        print(f"  - Leave Policy with Dynamic Leave Types")
+        print(f"  - Employee-Policy Assignment System")
+        print(f"  - Leave Requests with Leave Type Validation")
+        print(f"  - Leave Balance from Assigned Policy")
         print(f"  - Backward Compatibility (department field)")
-        print(f"  - Leave Balance with Assignments")
         
         return success_rate >= 80  # Consider 80%+ as passing
 
