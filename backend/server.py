@@ -181,7 +181,7 @@ class LeaveRequest(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     employee_id: str
-    leave_policy_id: str
+    leave_type: str  # e.g., "Casual Leave" - now just a string
     start_date: str
     end_date: str
     reason: str
@@ -189,7 +189,7 @@ class LeaveRequest(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class LeaveRequestCreate(BaseModel):
-    leave_policy_id: str
+    leave_type: str
     start_date: str
     end_date: str
     reason: str
