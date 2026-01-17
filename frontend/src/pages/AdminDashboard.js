@@ -81,6 +81,7 @@ export default function AdminDashboard({ user, onLogout }) {
             <Route path="/employees" element={<EmployeeManagement />} />
             <Route path="/payroll" element={<PayrollManagement />} />
             <Route path="/leaves" element={<LeaveManagement />} />
+            <Route path="/print-formats" element={<PrintFormatManagement />} />
           </Routes>
         </main>
       </div>
