@@ -220,9 +220,9 @@ export default function LeaveSection() {
                   <CardContent>
                     <div className="space-y-3">
                       <div className="flex justify-between text-sm">
-                        <span className="text-zinc-600">Total Days</span>
+                        <span className="text-zinc-600">Allocated Days</span>
                         <span className="font-medium text-zinc-900">
-                          {balance.total_days} days
+                          {balance.allocated_days} days
                         </span>
                       </div>
                       <div className="flex justify-between text-sm">
