@@ -145,6 +145,19 @@ class PayslipCreate(BaseModel):
     employee_id: str
     month: str
 
+class PrintFormat(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str
+    template_html: str  # Jinja2 template HTML
+    is_default: bool = False
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class PrintFormatCreate(BaseModel):
+    name: str
+    template_html: str
+    is_default: bool = False
+
 class LeaveType(BaseModel):
     type: str  # e.g., "Casual Leave"
     days: int  # e.g., 12
