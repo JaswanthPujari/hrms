@@ -153,11 +153,26 @@ class LeavePolicy(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     name: str
     days_per_year: int
+    description: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class LeavePolicyCreate(BaseModel):
     name: str
     days_per_year: int
+    description: Optional[str] = None
+
+class LeaveAssignment(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    employee_id: str
+    leave_policy_id: str
+    allocated_days: int
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class LeaveAssignmentCreate(BaseModel):
+    employee_id: str
+    leave_policy_id: str
+    allocated_days: int
 
 class LeaveRequest(BaseModel):
     model_config = ConfigDict(extra="ignore")
