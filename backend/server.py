@@ -380,6 +380,11 @@ async def generate_payslip(payslip_data: PayslipCreate, admin: User = Depends(ge
     if not payroll:
         raise HTTPException(status_code=404, detail="Payroll not assigned for this employee")
     
+    # Get payroll structure
+    structure = await db.payroll_structures.find_one({"id": payroll["payroll_structure_id"]}, {"_id": 0})
+    if not structure:
+        raise HTTPException(status_code=404, detail="Payroll structure not found")
+    
     # Check if payslip already exists for this month
     existing = await db.payslips.find_one(
         {"employee_id": payslip_data.employee_id, "month": payslip_data.month},
@@ -388,15 +393,15 @@ async def generate_payslip(payslip_data: PayslipCreate, admin: User = Depends(ge
     if existing:
         raise HTTPException(status_code=400, detail="Payslip already generated for this month")
     
-    # Calculate net pay
-    net_pay = payroll["basic_salary"] + payroll["allowances"] - payroll["deductions"]
+    # Calculate net pay using structure
+    net_pay = structure["basic_salary"] + structure["allowances"] - structure["deductions"]
     
     payslip = Payslip(
         employee_id=payslip_data.employee_id,
         month=payslip_data.month,
-        basic_salary=payroll["basic_salary"],
-        allowances=payroll["allowances"],
-        deductions=payroll["deductions"],
+        basic_salary=structure["basic_salary"],
+        allowances=structure["allowances"],
+        deductions=structure["deductions"],
         net_pay=net_pay
     )
     payslip_dict = payslip.model_dump()
