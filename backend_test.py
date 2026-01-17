@@ -634,20 +634,20 @@ class HRAPITester:
         self.test_create_leave_policy_with_description()  # NEW: With description field
         self.test_list_leave_policies()
         
-        # NEW: Leave Assignment System Tests
-        print("\n📋 Leave Assignment System Tests (NEW)")
-        self.test_create_leave_assignment()
-        self.test_get_employee_leave_assignments()
+        # NEW: Leave Policy Assignment System Tests
+        print("\n📋 Leave Policy Assignment System Tests (NEW)")
+        self.test_create_employee_policy_assignment()
+        self.test_get_employee_policy_assignment()
         
-        # Leave Request Tests (updated to work with assignments)
+        # Leave Request Tests (updated to work with leave types)
         print("\n📝 Leave Request Tests (UPDATED)")
         self.test_create_leave_request()
         self.test_list_leave_requests()
         self.test_update_leave_request()
         
-        # NEW: Leave Balance with Assignments
-        print("\n⚖️ Leave Balance with Assignments Tests (NEW)")
-        self.test_leave_balance_with_assignments()
+        # NEW: Leave Balance with Policy Assignment
+        print("\n⚖️ Leave Balance with Policy Assignment Tests (NEW)")
+        self.test_leave_balance_with_policy_assignment()
         
         # Cleanup
         print("\n🧹 Cleanup Tests")
