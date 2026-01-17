@@ -17,32 +17,46 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { Plus, Mail } from 'lucide-react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Plus, Mail, Edit } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../../lib/api';
 
 export default function EmployeeManagement() {
   const [employees, setEmployees] = useState([]);
+  const [departments, setDepartments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editingEmployee, setEditingEmployee] = useState(null);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
-    department: '',
+    department_id: '',
     joining_date: '',
     reporting_manager_id: '',
   });
 
   useEffect(() => {
-    fetchEmployees();
+    fetchData();
   }, []);
 
-  const fetchEmployees = async () => {
+  const fetchData = async () => {
     try {
-      const response = await api.get('/employees');
-      setEmployees(response.data);
+      const [employeesRes, departmentsRes] = await Promise.all([
+        api.get('/employees'),
+        api.get('/departments'),
+      ]);
+      setEmployees(employeesRes.data);
+      setDepartments(departmentsRes.data);
     } catch (error) {
-      toast.error('Failed to fetch employees');
+      toast.error('Failed to fetch data');
     } finally {
       setLoading(false);
     }
@@ -57,12 +71,47 @@ export default function EmployeeManagement() {
       };
       await api.post('/employees', payload);
       toast.success('Employee added and invitation sent!');
-      setFormData({ name: '', email: '', department: '', joining_date: '', reporting_manager_id: '' });
-      fetchEmployees();
+      setFormData({ name: '', email: '', department_id: '', joining_date: '', reporting_manager_id: '' });
+      fetchData();
       setOpen(false);
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed to add employee');
     }
+  };
+
+  const handleEdit = (employee) => {
+    setEditingEmployee(employee);
+    setFormData({
+      name: employee.name,
+      email: employee.email,
+      department_id: employee.department_id || '',
+      joining_date: employee.joining_date,
+      reporting_manager_id: employee.reporting_manager_id || '',
+    });
+    setEditOpen(true);
+  };
+
+  const handleUpdate = async (e) => {
+    e.preventDefault();
+    try {
+      const payload = {
+        ...formData,
+        reporting_manager_id: formData.reporting_manager_id || null,
+      };
+      await api.put(`/employees/${editingEmployee.id}`, payload);
+      toast.success('Employee updated successfully!');
+      setFormData({ name: '', email: '', department_id: '', joining_date: '', reporting_manager_id: '' });
+      setEditingEmployee(null);
+      fetchData();
+      setEditOpen(false);
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to update employee');
+    }
+  };
+
+  const getDepartmentName = (deptId) => {
+    const dept = departments.find((d) => d.id === deptId);
+    return dept ? dept.name : 'N/A';
   };
 
   if (loading) {
@@ -116,16 +165,24 @@ export default function EmployeeManagement() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="department">Department</Label>
-                <Input
-                  id="department"
-                  data-testid="employee-department-input"
-                  placeholder="Engineering"
-                  value={formData.department}
-                  onChange={(e) =>
-                    setFormData({ ...formData, department: e.target.value })
+                <Select
+                  value={formData.department_id}
+                  onValueChange={(value) =>
+                    setFormData({ ...formData, department_id: value })
                   }
                   required
-                />
+                >
+                  <SelectTrigger data-testid="employee-department-select">
+                    <SelectValue placeholder="Select department" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {departments.map((dept) => (
+                      <SelectItem key={dept.id} value={dept.id}>
+                        {dept.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="joining_date">Joining Date</Label>
@@ -142,22 +199,24 @@ export default function EmployeeManagement() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="reporting_manager">Reporting Manager (Optional)</Label>
-                <select
-                  id="reporting_manager"
-                  data-testid="reporting-manager-select"
+                <Select
                   value={formData.reporting_manager_id}
-                  onChange={(e) =>
-                    setFormData({ ...formData, reporting_manager_id: e.target.value })
+                  onValueChange={(value) =>
+                    setFormData({ ...formData, reporting_manager_id: value })
                   }
-                  className="w-full px-3 py-2 border border-zinc-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900"
                 >
-                  <option value="">No Reporting Manager</option>
-                  {employees.map((emp) => (
-                    <option key={emp.id} value={emp.id}>
-                      {emp.name} - {emp.employee_id}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger data-testid="reporting-manager-select">
+                    <SelectValue placeholder="No Reporting Manager" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">No Reporting Manager</SelectItem>
+                    {employees.map((emp) => (
+                      <SelectItem key={emp.id} value={emp.id}>
+                        {emp.name} - {emp.employee_id}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <Button type="submit" className="w-full bg-zinc-900 hover:bg-zinc-800" data-testid="submit-employee-button">
                 Add Employee & Send Invite
@@ -166,6 +225,101 @@ export default function EmployeeManagement() {
           </DialogContent>
         </Dialog>
       </div>
+
+      {/* Edit Employee Dialog */}
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit Employee</DialogTitle>
+            <DialogDescription>
+              Update employee information
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleUpdate} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit_name">Full Name</Label>
+              <Input
+                id="edit_name"
+                data-testid="edit-employee-name-input"
+                placeholder="John Doe"
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit_email">Email</Label>
+              <Input
+                id="edit_email"
+                data-testid="edit-employee-email-input"
+                type="email"
+                placeholder="john@company.com"
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit_department">Department</Label>
+              <Select
+                value={formData.department_id}
+                onValueChange={(value) =>
+                  setFormData({ ...formData, department_id: value })
+                }
+                required
+              >
+                <SelectTrigger data-testid="edit-employee-department-select">
+                  <SelectValue placeholder="Select department" />
+                </SelectTrigger>
+                <SelectContent>
+                  {departments.map((dept) => (
+                    <SelectItem key={dept.id} value={dept.id}>
+                      {dept.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit_joining_date">Joining Date</Label>
+              <Input
+                id="edit_joining_date"
+                data-testid="edit-employee-joining-date-input"
+                type="date"
+                value={formData.joining_date}
+                onChange={(e) =>
+                  setFormData({ ...formData, joining_date: e.target.value })
+                }
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit_reporting_manager">Reporting Manager (Optional)</Label>
+              <Select
+                value={formData.reporting_manager_id}
+                onValueChange={(value) =>
+                  setFormData({ ...formData, reporting_manager_id: value })
+                }
+              >
+                <SelectTrigger data-testid="edit-reporting-manager-select">
+                  <SelectValue placeholder="No Reporting Manager" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">No Reporting Manager</SelectItem>
+                  {employees.filter(emp => emp.id !== editingEmployee?.id).map((emp) => (
+                    <SelectItem key={emp.id} value={emp.id}>
+                      {emp.name} - {emp.employee_id}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button type="submit" className="w-full bg-zinc-900 hover:bg-zinc-800" data-testid="update-employee-button">
+              Update Employee
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {/* Employees List */}
       <div className="grid gap-4">
@@ -186,12 +340,24 @@ export default function EmployeeManagement() {
                       {employee.email}
                     </CardDescription>
                   </div>
-                  {employee.invited && (
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                      <Mail className="h-3 w-3 mr-1" />
-                      Invited
-                    </span>
-                  )}
+                  <div className="flex gap-2">
+                    {employee.invited && (
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                        <Mail className="h-3 w-3 mr-1" />
+                        Invited
+                      </span>
+                    )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleEdit(employee)}
+                      className="border-zinc-300"
+                      data-testid="edit-employee-button"
+                    >
+                      <Edit className="h-3 w-3 mr-1" />
+                      Edit
+                    </Button>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent>
@@ -202,7 +368,9 @@ export default function EmployeeManagement() {
                   </div>
                   <div>
                     <p className="text-zinc-600">Department</p>
-                    <p className="font-medium text-zinc-900">{employee.department}</p>
+                    <p className="font-medium text-zinc-900">
+                      {employee.department_id ? getDepartmentName(employee.department_id) : employee.department || 'N/A'}
+                    </p>
                   </div>
                   <div>
                     <p className="text-zinc-600">Joining Date</p>
