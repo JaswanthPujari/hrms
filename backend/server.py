@@ -86,7 +86,8 @@ class Employee(BaseModel):
     employee_id: str = Field(default_factory=lambda: f"EMP{str(uuid.uuid4())[:8].upper()}")
     name: str
     email: EmailStr
-    department_id: str
+    department_id: Optional[str] = None
+    department: Optional[str] = None  # Keep for backward compatibility
     joining_date: str
     reporting_manager_id: Optional[str] = None
     invited: bool = False
