@@ -69,13 +69,24 @@ class Token(BaseModel):
     token_type: str
     user: User
 
+class Department(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str
+    description: Optional[str] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class DepartmentCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+
 class Employee(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     employee_id: str = Field(default_factory=lambda: f"EMP{str(uuid.uuid4())[:8].upper()}")
     name: str
     email: EmailStr
-    department: str
+    department_id: str
     joining_date: str
     reporting_manager_id: Optional[str] = None
     invited: bool = False
@@ -85,8 +96,15 @@ class Employee(BaseModel):
 class EmployeeCreate(BaseModel):
     name: str
     email: EmailStr
-    department: str
+    department_id: str
     joining_date: str
+    reporting_manager_id: Optional[str] = None
+
+class EmployeeUpdate(BaseModel):
+    name: Optional[str] = None
+    email: Optional[EmailStr] = None
+    department_id: Optional[str] = None
+    joining_date: Optional[str] = None
     reporting_manager_id: Optional[str] = None
 
 class Payroll(BaseModel):
