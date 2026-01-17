@@ -197,7 +197,7 @@ class LeaveRequestUpdate(BaseModel):
 class LeaveBalance(BaseModel):
     leave_policy_id: str
     leave_policy_name: str
-    total_days: int
+    allocated_days: int
     used_days: int
     remaining_days: int
 
