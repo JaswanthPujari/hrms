@@ -532,19 +532,25 @@ class HRAPITester:
             self.log_test("Get Employee Policy Assignment", False, f"Status: {status}")
             return False
 
-    def test_leave_balance_with_assignments(self):
-        """NEW: Test leave balance calculation using assignments instead of policies"""
+    def test_leave_balance_with_policy_assignment(self):
+        """NEW: Test leave balance calculation from assigned policy"""
         success, response, status = self.make_request('GET', '/leave-requests/balance', token=self.employee_token)
         if success and isinstance(response, list):
-            # Check if balance reflects assignment allocation (15 days) not policy default (10 days)
-            for balance in response:
-                if balance.get('allocated_days') == 15:  # Should match our assignment
-                    self.log_test("Leave Balance with Assignments", True)
+            # Check if balance reflects policy leave types (Casual: 12, Sick: 10)
+            leave_types_found = {balance.get('leave_type'): balance.get('allocated_days') for balance in response}
+            
+            if 'Casual Leave' in leave_types_found and 'Sick Leave' in leave_types_found:
+                if leave_types_found['Casual Leave'] == 12 and leave_types_found['Sick Leave'] == 10:
+                    self.log_test("Leave Balance with Policy Assignment", True)
                     return True
-            self.log_test("Leave Balance with Assignments", False, "Balance doesn't reflect assignment allocation")
-            return False
+                else:
+                    self.log_test("Leave Balance with Policy Assignment", False, f"Wrong allocation: {leave_types_found}")
+                    return False
+            else:
+                self.log_test("Leave Balance with Policy Assignment", False, f"Missing leave types: {leave_types_found}")
+                return False
         else:
-            self.log_test("Leave Balance with Assignments", False, f"Status: {status}")
+            self.log_test("Leave Balance with Policy Assignment", False, f"Status: {status}")
             return False
 
     def test_backward_compatibility_employee_department(self):
