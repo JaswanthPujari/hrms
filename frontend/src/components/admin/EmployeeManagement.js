@@ -140,6 +140,25 @@ export default function EmployeeManagement() {
                   required
                 />
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="reporting_manager">Reporting Manager (Optional)</Label>
+                <select
+                  id="reporting_manager"
+                  data-testid="reporting-manager-select"
+                  value={formData.reporting_manager_id}
+                  onChange={(e) =>
+                    setFormData({ ...formData, reporting_manager_id: e.target.value })
+                  }
+                  className="w-full px-3 py-2 border border-zinc-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900"
+                >
+                  <option value="">No Reporting Manager</option>
+                  {employees.map((emp) => (
+                    <option key={emp.id} value={emp.id}>
+                      {emp.name} - {emp.employee_id}
+                    </option>
+                  ))}
+                </select>
+              </div>
               <Button type="submit" className="w-full bg-zinc-900 hover:bg-zinc-800" data-testid="submit-employee-button">
                 Add Employee & Send Invite
               </Button>
