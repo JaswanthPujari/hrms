@@ -181,10 +181,10 @@ class HRAPITester:
             self.log_test("Get Employee", False, f"Status: {status}")
             return False
 
-    def test_assign_payroll(self):
-        """Test assigning payroll to employee"""
+    def test_assign_payroll_legacy(self):
+        """Test legacy payroll assignment (for backward compatibility testing)"""
         if not self.test_employee_id:
-            self.log_test("Assign Payroll", False, "No employee ID to test")
+            self.log_test("Assign Payroll Legacy", False, "No employee ID to test")
             return False
             
         payroll_data = {
@@ -196,10 +196,10 @@ class HRAPITester:
         
         success, response, status = self.make_request('POST', '/payroll', payroll_data, self.admin_token, expect_status=200)
         if success and response.get('employee_id') == self.test_employee_id:
-            self.log_test("Assign Payroll", True)
+            self.log_test("Assign Payroll Legacy", True)
             return True
         else:
-            self.log_test("Assign Payroll", False, f"Status: {status}")
+            self.log_test("Assign Payroll Legacy", False, f"Status: {status}")
             return False
 
     def test_get_payroll(self):
