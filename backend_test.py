@@ -482,16 +482,18 @@ class HRAPITester:
             return False
 
     def test_create_leave_policy_with_description(self):
-        """NEW: Test creating leave policy with description field"""
+        """NEW: Test creating another leave policy with description field"""
         policy_data = {
-            "name": "Sick Leave",
-            "days_per_year": 10,
-            "description": "Medical leave for illness and health issues"
+            "name": "Manager Policy",
+            "description": "Enhanced leave policy for managers",
+            "leave_types": [
+                {"type": "Annual Leave", "days": 20},
+                {"type": "Personal Leave", "days": 5}
+            ]
         }
         
         success, response, status = self.make_request('POST', '/leave-policies', policy_data, self.admin_token, expect_status=200)
         if success and 'id' in response and response.get('description'):
-            self.test_policy_id = response['id']  # Update for other tests
             self.log_test("Create Leave Policy with Description", True)
             return True
         else:
