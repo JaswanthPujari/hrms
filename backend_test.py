@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
-HR Management System Backend API Testing
-Tests all authentication, employee, payroll, and leave management endpoints
+HR Management System Backend API Testing - UPDATED FOR NEW FEATURES
+Tests all authentication, department, employee, payroll, and leave management endpoints
+Including new features: Department Management, Employee Update, Org Tree, Leave Assignments, Payroll Structures
 """
 
 import requests
@@ -19,6 +20,9 @@ class HRAPITester:
         self.test_employee_id = None
         self.test_policy_id = None
         self.test_payslip_id = None
+        self.test_department_id = None
+        self.test_payroll_structure_id = None
+        self.test_leave_assignment_id = None
         self.tests_run = 0
         self.tests_passed = 0
         self.failed_tests = []
