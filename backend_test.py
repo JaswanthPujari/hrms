@@ -273,19 +273,23 @@ class HRAPITester:
             return False
 
     def test_create_leave_policy(self):
-        """Test creating leave policy"""
+        """Test creating leave policy with dynamic leave types"""
         policy_data = {
-            "name": "Casual Leave",
-            "days_per_year": 12
+            "name": "Standard Employee Policy",
+            "description": "Standard leave policy for all employees",
+            "leave_types": [
+                {"type": "Casual Leave", "days": 12},
+                {"type": "Sick Leave", "days": 10}
+            ]
         }
         
         success, response, status = self.make_request('POST', '/leave-policies', policy_data, self.admin_token, expect_status=200)
         if success and 'id' in response:
             self.test_policy_id = response['id']
-            self.log_test("Create Leave Policy", True)
+            self.log_test("Create Leave Policy (Dynamic Types)", True)
             return True
         else:
-            self.log_test("Create Leave Policy", False, f"Status: {status}")
+            self.log_test("Create Leave Policy (Dynamic Types)", False, f"Status: {status}")
             return False
 
     def test_list_leave_policies(self):
