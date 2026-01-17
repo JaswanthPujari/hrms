@@ -614,6 +614,8 @@ async def create_leave_policy(policy_data: LeavePolicyCreate, admin: User = Depe
     policy = LeavePolicy(**policy_data.model_dump())
     policy_dict = policy.model_dump()
     policy_dict["created_at"] = policy_dict["created_at"].isoformat()
+    # Convert leave_types list of LeaveType objects to dicts
+    policy_dict["leave_types"] = [lt.model_dump() if hasattr(lt, 'model_dump') else lt for lt in policy_dict["leave_types"]]
     
     await db.leave_policies.insert_one(policy_dict)
     return policy
@@ -624,6 +626,9 @@ async def list_leave_policies(current_user: User = Depends(get_current_user)):
     for policy in policies:
         if isinstance(policy.get("created_at"), str):
             policy["created_at"] = datetime.fromisoformat(policy["created_at"])
+        # Convert leave_types dicts back to LeaveType objects
+        if "leave_types" in policy:
+            policy["leave_types"] = [LeaveType(**lt) if isinstance(lt, dict) else lt for lt in policy["leave_types"]]
     return policies
 
 @api_router.delete("/leave-policies/{policy_id}")
@@ -633,8 +638,8 @@ async def delete_leave_policy(policy_id: str, admin: User = Depends(get_admin_us
         raise HTTPException(status_code=404, detail="Leave policy not found")
     return {"message": "Leave policy deleted successfully"}
 
-@api_router.post("/leave-assignments", response_model=LeaveAssignment)
-async def create_leave_assignment(assignment_data: LeaveAssignmentCreate, admin: User = Depends(get_admin_user)):
+@api_router.post("/employee-policy-assignments", response_model=EmployeePolicyAssignment)
+async def assign_policy_to_employee(assignment_data: EmployeePolicyAssignmentCreate, admin: User = Depends(get_admin_user)):
     # Check if employee exists
     employee = await db.employees.find_one({"id": assignment_data.employee_id}, {"_id": 0})
     if not employee:
@@ -646,39 +651,52 @@ async def create_leave_assignment(assignment_data: LeaveAssignmentCreate, admin:
         raise HTTPException(status_code=404, detail="Leave policy not found")
     
     # Check if assignment already exists
-    existing = await db.leave_assignments.find_one({
-        "employee_id": assignment_data.employee_id,
-        "leave_policy_id": assignment_data.leave_policy_id
+    existing = await db.employee_policy_assignments.find_one({
+        "employee_id": assignment_data.employee_id
     }, {"_id": 0})
     
     if existing:
         # Update existing assignment
-        await db.leave_assignments.update_one(
-            {"employee_id": assignment_data.employee_id, "leave_policy_id": assignment_data.leave_policy_id},
-            {"$set": {"allocated_days": assignment_data.allocated_days}}
+        await db.employee_policy_assignments.update_one(
+            {"employee_id": assignment_data.employee_id},
+            {"$set": {"leave_policy_id": assignment_data.leave_policy_id}}
         )
-        updated = await db.leave_assignments.find_one({
-            "employee_id": assignment_data.employee_id,
-            "leave_policy_id": assignment_data.leave_policy_id
+        updated = await db.employee_policy_assignments.find_one({
+            "employee_id": assignment_data.employee_id
         }, {"_id": 0})
         if isinstance(updated.get("created_at"), str):
             updated["created_at"] = datetime.fromisoformat(updated["created_at"])
-        return LeaveAssignment(**updated)
+        return EmployeePolicyAssignment(**updated)
     
-    assignment = LeaveAssignment(**assignment_data.model_dump())
+    assignment = EmployeePolicyAssignment(**assignment_data.model_dump())
     assignment_dict = assignment.model_dump()
     assignment_dict["created_at"] = assignment_dict["created_at"].isoformat()
     
-    await db.leave_assignments.insert_one(assignment_dict)
+    await db.employee_policy_assignments.insert_one(assignment_dict)
     return assignment
 
-@api_router.get("/leave-assignments/employee/{employee_id}", response_model=List[LeaveAssignment])
-async def get_employee_leave_assignments(employee_id: str, current_user: User = Depends(get_current_user)):
-    assignments = await db.leave_assignments.find({"employee_id": employee_id}, {"_id": 0}).to_list(1000)
-    for assignment in assignments:
-        if isinstance(assignment.get("created_at"), str):
-            assignment["created_at"] = datetime.fromisoformat(assignment["created_at"])
-    return assignments
+@api_router.get("/employee-policy-assignments/employee/{employee_id}")
+async def get_employee_policy_assignment(employee_id: str, current_user: User = Depends(get_current_user)):
+    assignment = await db.employee_policy_assignments.find_one({"employee_id": employee_id}, {"_id": 0})
+    if not assignment:
+        return None
+    
+    if isinstance(assignment.get("created_at"), str):
+        assignment["created_at"] = datetime.fromisoformat(assignment["created_at"])
+    
+    # Get the full policy details
+    policy = await db.leave_policies.find_one({"id": assignment["leave_policy_id"]}, {"_id": 0})
+    if policy:
+        if isinstance(policy.get("created_at"), str):
+            policy["created_at"] = datetime.fromisoformat(policy["created_at"])
+        if "leave_types" in policy:
+            policy["leave_types"] = [LeaveType(**lt) if isinstance(lt, dict) else lt for lt in policy["leave_types"]]
+        return {
+            **assignment,
+            "policy": policy
+        }
+    
+    return assignment
 
 # ============= LEAVE REQUEST ROUTES =============
 
