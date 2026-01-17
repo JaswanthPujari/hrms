@@ -31,7 +31,6 @@ import { toast } from 'sonner';
 import api from '../../lib/api';
 
 export default function LeaveSection() {
-  const [policies, setPolicies] = useState([]);
   const [requests, setRequests] = useState([]);
   const [balances, setBalances] = useState([]);
   const [loading, setLoading] = useState(true);
