@@ -219,6 +219,17 @@ class LeaveBalance(BaseModel):
     used_days: int
     remaining_days: int
 
+class Holiday(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    date: str  # Format: YYYY-MM-DD
+    name: str
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class HolidayCreate(BaseModel):
+    date: str
+    name: str
+
 # ============= AUTH HELPERS =============
 
 def verify_password(plain_password, hashed_password):
@@ -1189,6 +1200,36 @@ async def create_leave_request(request_data: LeaveRequestCreate, current_user: U
     if not leave_type_exists:
         raise HTTPException(status_code=400, detail=f"Leave type '{request_data.leave_type}' not available in your policy")
     
+    # Validate dates - check for holidays and weekends
+    start_date = datetime.strptime(request_data.start_date, "%Y-%m-%d").date()
+    end_date = datetime.strptime(request_data.end_date, "%Y-%m-%d").date()
+    
+    if start_date > end_date:
+        raise HTTPException(status_code=400, detail="Start date cannot be after end date")
+    
+    # Check each date in the range for holidays and weekends
+    current_date = start_date
+    invalid_dates = []
+    holidays = await db.holidays.find({}, {"_id": 0}).to_list(1000)
+    holiday_dates = {holiday["date"] for holiday in holidays}
+    
+    while current_date <= end_date:
+        # Check if it's a weekend (Saturday = 5, Sunday = 6)
+        if current_date.weekday() >= 5:
+            invalid_dates.append(f"{current_date.strftime('%Y-%m-%d')} (Weekend)")
+        # Check if it's a holiday
+        elif current_date.strftime("%Y-%m-%d") in holiday_dates:
+            holiday_name = next((h["name"] for h in holidays if h["date"] == current_date.strftime("%Y-%m-%d")), "Holiday")
+            invalid_dates.append(f"{current_date.strftime('%Y-%m-%d')} ({holiday_name})")
+        
+        current_date += timedelta(days=1)
+    
+    if invalid_dates:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Cannot apply for leave on holidays or weekends. Invalid dates: {', '.join(invalid_dates)}"
+        )
+    
     leave_request = LeaveRequest(
         employee_id=employee["id"],
         **request_data.model_dump()
@@ -1314,13 +1355,71 @@ async def get_leave_balance(current_user: User = Depends(get_current_user)):
     
     return balances
 
+# ============= HOLIDAY ROUTES =============
+
+@api_router.get("/holidays", response_model=List[Holiday])
+async def list_holidays(current_user: User = Depends(get_current_user)):
+    holidays = await db.holidays.find({}, {"_id": 0}).sort("date", 1).to_list(1000)
+    for holiday in holidays:
+        if isinstance(holiday.get("created_at"), str):
+            holiday["created_at"] = datetime.fromisoformat(holiday["created_at"])
+    return [Holiday(**h) for h in holidays]
+
+@api_router.post("/holidays", response_model=Holiday)
+async def create_holiday(holiday_data: HolidayCreate, admin: User = Depends(get_admin_user)):
+    # Check for duplicate date
+    existing = await db.holidays.find_one({"date": holiday_data.date}, {"_id": 0})
+    if existing:
+        raise HTTPException(status_code=400, detail=f"Holiday already exists for date {holiday_data.date}")
+    
+    holiday = Holiday(**holiday_data.model_dump())
+    holiday_dict = holiday.model_dump()
+    holiday_dict["created_at"] = holiday_dict["created_at"].isoformat()
+    
+    await db.holidays.insert_one(holiday_dict)
+    return holiday
+
+@api_router.post("/holidays/bulk", response_model=List[Holiday])
+async def create_holidays_bulk(holidays_data: List[HolidayCreate], admin: User = Depends(get_admin_user)):
+    created_holidays = []
+    for holiday_data in holidays_data:
+        # Check for duplicate date
+        existing = await db.holidays.find_one({"date": holiday_data.date}, {"_id": 0})
+        if not existing:
+            holiday = Holiday(**holiday_data.model_dump())
+            holiday_dict = holiday.model_dump()
+            holiday_dict["created_at"] = holiday_dict["created_at"].isoformat()
+            await db.holidays.insert_one(holiday_dict)
+            created_holidays.append(holiday)
+    return created_holidays
+
+@api_router.delete("/holidays/{holiday_id}")
+async def delete_holiday(holiday_id: str, admin: User = Depends(get_admin_user)):
+    result = await db.holidays.delete_one({"id": holiday_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Holiday not found")
+    return {"message": "Holiday deleted successfully"}
+
 # Include router
 app.include_router(api_router)
+
+# CORS configuration - must be before other middleware
+cors_origins_env = os.environ.get('CORS_ORIGINS', 'http://localhost:3000,https://hrms-nine-delta.vercel.app')
+# Split by comma and strip whitespace from each origin
+cors_origins = [origin.strip() for origin in cors_origins_env.split(',') if origin.strip()]
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+logger.info(f"CORS origins configured: {cors_origins}")
 
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
+    allow_origins=cors_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )

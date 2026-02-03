@@ -4,6 +4,7 @@ import { Toaster } from '@/components/ui/sonner';
 import Login from './pages/Login';
 import AdminDashboard from './pages/AdminDashboard';
 import EmployeeDashboard from './pages/EmployeeDashboard';
+import { isTokenExpired, logoutUser } from './lib/api';
 import './App.css';
 
 function App() {
@@ -13,10 +14,33 @@ function App() {
   useEffect(() => {
     const token = localStorage.getItem('token');
     const userData = localStorage.getItem('user');
+    
+    // Check if token exists and is not expired
     if (token && userData) {
-      setUser(JSON.parse(userData));
+      if (isTokenExpired(token)) {
+        // Token is expired, log out user (logoutUser handles clearing and redirect)
+        setUser(null);
+        logoutUser();
+      } else {
+        setUser(JSON.parse(userData));
+      }
     }
     setLoading(false);
+
+    // Set up periodic token expiration check (every 60 seconds)
+    const tokenCheckInterval = setInterval(() => {
+      const currentToken = localStorage.getItem('token');
+      if (currentToken && isTokenExpired(currentToken)) {
+        // Token expired, log out user
+        setUser(null);
+        logoutUser();
+      }
+    }, 60000); // Check every 60 seconds
+
+    // Cleanup interval on unmount
+    return () => {
+      clearInterval(tokenCheckInterval);
+    };
   }, []);
 
   const handleLogin = (userData, token) => {

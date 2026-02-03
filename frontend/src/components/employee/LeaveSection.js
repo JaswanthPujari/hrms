@@ -33,6 +33,7 @@ import api from '../../lib/api';
 export default function LeaveSection() {
   const [requests, setRequests] = useState([]);
   const [balances, setBalances] = useState([]);
+  const [holidays, setHolidays] = useState([]);
   const [loading, setLoading] = useState(true);
   const [applyDialog, setApplyDialog] = useState(false);
   const [formData, setFormData] = useState({
@@ -48,12 +49,14 @@ export default function LeaveSection() {
 
   const fetchData = async () => {
     try {
-      const [requestsRes, balancesRes] = await Promise.all([
+      const [requestsRes, balancesRes, holidaysRes] = await Promise.all([
         api.get('/leave-requests'),
         api.get('/leave-requests/balance'),
+        api.get('/holidays'),
       ]);
       setRequests(requestsRes.data || []);
       setBalances(balancesRes.data || []);
+      setHolidays(holidaysRes.data || []);
       
       // Show warning if no leave policy is assigned
       if (!balancesRes.data || balancesRes.data.length === 0) {
@@ -83,8 +86,67 @@ export default function LeaveSection() {
     }
   };
 
+  // Check if a date string is a holiday or weekend
+  const isDateDisabled = (dateString) => {
+    if (!dateString) return false;
+    const date = new Date(dateString);
+    const dayOfWeek = date.getDay();
+    
+    // Check if it's a weekend (Saturday = 6, Sunday = 0)
+    if (dayOfWeek === 0 || dayOfWeek === 6) {
+      return true;
+    }
+    
+    // Check if it's a holiday
+    return holidays.some(holiday => holiday.date === dateString);
+  };
+
+  // Get holiday name for a date string
+  const getHolidayName = (dateString) => {
+    if (!dateString) return null;
+    const holiday = holidays.find(h => h.date === dateString);
+    return holiday ? holiday.name : null;
+  };
+
+  // Validate date range for holidays and weekends
+  const validateDateRange = (startDate, endDate) => {
+    if (!startDate || !endDate) return null;
+    
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const invalidDates = [];
+    
+    const currentDate = new Date(start);
+    while (currentDate <= end) {
+      const dateStr = currentDate.toISOString().split('T')[0];
+      const dayOfWeek = currentDate.getDay();
+      
+      if (dayOfWeek === 0 || dayOfWeek === 6) {
+        const dayName = dayOfWeek === 0 ? 'Sunday' : 'Saturday';
+        invalidDates.push(`${dateStr} (${dayName})`);
+      } else {
+        const holiday = holidays.find(h => h.date === dateStr);
+        if (holiday) {
+          invalidDates.push(`${dateStr} (${holiday.name})`);
+        }
+      }
+      
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+    
+    return invalidDates.length > 0 ? invalidDates : null;
+  };
+
   const handleApplyLeave = async (e) => {
     e.preventDefault();
+    
+    // Frontend validation for holidays and weekends
+    const invalidDates = validateDateRange(formData.start_date, formData.end_date);
+    if (invalidDates) {
+      toast.error(`Cannot apply for leave on holidays or weekends. Invalid dates: ${invalidDates.join(', ')}`);
+      return;
+    }
+    
     try {
       await api.post('/leave-requests', formData);
       toast.success('Leave request submitted!');
@@ -140,7 +202,7 @@ export default function LeaveSection() {
               Apply for Leave
             </Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="overflow-visible">
             <DialogHeader>
               <DialogTitle>Apply for Leave</DialogTitle>
               <DialogDescription>
@@ -182,9 +244,29 @@ export default function LeaveSection() {
                   data-testid="start-date-input"
                   type="date"
                   value={formData.start_date}
-                  onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
+                  onChange={(e) => {
+                    const dateValue = e.target.value;
+                    if (dateValue && isDateDisabled(dateValue)) {
+                      const holidayName = getHolidayName(dateValue);
+                      const date = new Date(dateValue);
+                      const dayName = date.getDay() === 0 ? 'Sunday' : date.getDay() === 6 ? 'Saturday' : null;
+                      const reason = holidayName || dayName;
+                      toast.warning(`Cannot select ${reason ? reason : 'this date'} for leave application. Please choose a working day.`);
+                      setFormData({ ...formData, start_date: '' });
+                      return;
+                    }
+                    setFormData({ ...formData, start_date: dateValue });
+                  }}
+                  min={new Date().toISOString().split('T')[0]}
                   required
                 />
+                {formData.start_date && isDateDisabled(formData.start_date) && (
+                  <p className="text-xs text-red-600">
+                    {getHolidayName(formData.start_date) 
+                      ? `This date is a holiday: ${getHolidayName(formData.start_date)}`
+                      : 'This date is a weekend. Please select a working day.'}
+                  </p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="end_date">End Date</Label>
@@ -193,9 +275,37 @@ export default function LeaveSection() {
                   data-testid="end-date-input"
                   type="date"
                   value={formData.end_date}
-                  onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
+                  onChange={(e) => {
+                    const dateValue = e.target.value;
+                    if (dateValue) {
+                      if (isDateDisabled(dateValue)) {
+                        const holidayName = getHolidayName(dateValue);
+                        const date = new Date(dateValue);
+                        const dayName = date.getDay() === 0 ? 'Sunday' : date.getDay() === 6 ? 'Saturday' : null;
+                        const reason = holidayName || dayName;
+                        toast.warning(`Cannot select ${reason ? reason : 'this date'} for leave application. Please choose a working day.`);
+                        setFormData({ ...formData, end_date: '' });
+                        return;
+                      }
+                      // Ensure end date is not before start date
+                      if (formData.start_date && dateValue < formData.start_date) {
+                        toast.warning('End date cannot be before start date');
+                        setFormData({ ...formData, end_date: '' });
+                        return;
+                      }
+                    }
+                    setFormData({ ...formData, end_date: dateValue });
+                  }}
+                  min={formData.start_date || new Date().toISOString().split('T')[0]}
                   required
                 />
+                {formData.end_date && isDateDisabled(formData.end_date) && (
+                  <p className="text-xs text-red-600">
+                    {getHolidayName(formData.end_date) 
+                      ? `This date is a holiday: ${getHolidayName(formData.end_date)}`
+                      : 'This date is a weekend. Please select a working day.'}
+                  </p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="reason">Reason</Label>

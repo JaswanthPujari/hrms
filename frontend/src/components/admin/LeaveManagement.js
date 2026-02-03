@@ -39,6 +39,7 @@ export default function LeaveManagement() {
   const [editDialog, setEditDialog] = useState(false);
   const [assignDialog, setAssignDialog] = useState(false);
   const [editingPolicy, setEditingPolicy] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
   
   const [policyForm, setPolicyForm] = useState({
     name: '',
@@ -103,9 +104,23 @@ export default function LeaveManagement() {
 
   const handleCreatePolicy = async (e) => {
     e.preventDefault();
+    if (submitting) return; // Prevent multiple submissions
+    
+    // Check for duplicate name (case-insensitive)
+    const trimmedName = policyForm.name.trim();
+    const duplicateExists = policies.some(
+      policy => policy.name.toLowerCase().trim() === trimmedName.toLowerCase()
+    );
+    
+    if (duplicateExists) {
+      toast.error('A leave policy with this name already exists. Please use a different name.');
+      return;
+    }
+    
+    setSubmitting(true);
     try {
       const payload = {
-        name: policyForm.name,
+        name: trimmedName,
         description: policyForm.description,
         leave_types: policyForm.leave_types.map(lt => ({
           type: lt.type,
@@ -118,7 +133,10 @@ export default function LeaveManagement() {
       fetchData();
       setPolicyDialog(false);
     } catch (error) {
-      toast.error('Failed to create policy');
+      const errorMessage = error.response?.data?.detail || 'Failed to create policy';
+      toast.error(errorMessage);
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -137,9 +155,24 @@ export default function LeaveManagement() {
 
   const handleUpdatePolicy = async (e) => {
     e.preventDefault();
+    if (submitting) return; // Prevent multiple submissions
+    
+    // Check for duplicate name (case-insensitive), excluding current policy
+    const trimmedName = policyForm.name.trim();
+    const duplicateExists = policies.some(
+      policy => policy.id !== editingPolicy.id && 
+                policy.name.toLowerCase().trim() === trimmedName.toLowerCase()
+    );
+    
+    if (duplicateExists) {
+      toast.error('A leave policy with this name already exists. Please use a different name.');
+      return;
+    }
+    
+    setSubmitting(true);
     try {
       const payload = {
-        name: policyForm.name,
+        name: trimmedName,
         description: policyForm.description,
         leave_types: policyForm.leave_types.map(lt => ({
           type: lt.type,
@@ -154,11 +187,15 @@ export default function LeaveManagement() {
       setEditDialog(false);
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed to update policy');
+    } finally {
+      setSubmitting(false);
     }
   };
 
   const handleAssignPolicy = async (e) => {
     e.preventDefault();
+    if (submitting) return; // Prevent multiple submissions
+    setSubmitting(true);
     try {
       await api.post('/employee-policy-assignments', assignForm);
       toast.success('Policy assigned successfully!');
@@ -166,6 +203,8 @@ export default function LeaveManagement() {
       setAssignDialog(false);
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed to assign policy');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -341,8 +380,13 @@ export default function LeaveManagement() {
                     ))}
                   </div>
 
-                  <Button type="submit" className="w-full bg-zinc-900 hover:bg-zinc-800" data-testid="submit-policy-button">
-                    Create Policy
+                  <Button 
+                    type="submit" 
+                    className="w-full bg-zinc-900 hover:bg-zinc-800" 
+                    data-testid="submit-policy-button"
+                    disabled={submitting}
+                  >
+                    {submitting ? 'Creating...' : 'Create Policy'}
                   </Button>
                 </form>
               </DialogContent>
@@ -500,8 +544,13 @@ export default function LeaveManagement() {
                 ))}
               </div>
 
-              <Button type="submit" className="w-full bg-zinc-900 hover:bg-zinc-800" data-testid="update-policy-button">
-                Update Policy
+              <Button 
+                type="submit" 
+                className="w-full bg-zinc-900 hover:bg-zinc-800" 
+                data-testid="update-policy-button"
+                disabled={submitting}
+              >
+                {submitting ? 'Updating...' : 'Update Policy'}
               </Button>
             </form>
           </DialogContent>
@@ -571,8 +620,13 @@ export default function LeaveManagement() {
                         </SelectContent>
                       </Select>
                     </div>
-                    <Button type="submit" className="w-full bg-zinc-900 hover:bg-zinc-800" data-testid="submit-assign-button">
-                      Assign Policy
+                    <Button 
+                      type="submit" 
+                      className="w-full bg-zinc-900 hover:bg-zinc-800" 
+                      data-testid="submit-assign-button"
+                      disabled={submitting}
+                    >
+                      {submitting ? 'Assigning...' : 'Assign Policy'}
                     </Button>
                   </form>
                 </DialogContent>

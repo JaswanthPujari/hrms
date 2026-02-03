@@ -40,6 +40,7 @@ export default function PayrollManagement() {
   const [payslipDialog, setPayslipDialog] = useState(false);
   const [editDialog, setEditDialog] = useState(false);
   const [editStructure, setEditStructure] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
  
 
   const openEditDialog = (structure) => {
@@ -111,9 +112,24 @@ const updateSalaryType = (index, field, value) => {
   };
   const handleUpdateStructure = async (e) => {
   e.preventDefault();
+  if (submitting) return; // Prevent multiple submissions
+  
+  // Check for duplicate name (case-insensitive), excluding current structure
+  const trimmedName = structureForm.name.trim();
+  const duplicateExists = structures.some(
+    structure => structure.id !== editStructure.id && 
+                 structure.name.toLowerCase().trim() === trimmedName.toLowerCase()
+  );
+  
+  if (duplicateExists) {
+    toast.error('A payroll structure with this name already exists. Please use a different name.');
+    return;
+  }
+  
+  setSubmitting(true);
   try {
     await api.put(`/payroll-structures/${editStructure.id}`, {
-      name: structureForm.name,
+      name: trimmedName,
       salary_types: structureForm.salary_types.map(item => ({
         type: item.type,
         amount: Number(item.amount)
@@ -125,7 +141,10 @@ const updateSalaryType = (index, field, value) => {
     setEditDialog(false);
     fetchData();
   } catch (error) {
-    toast.error("Failed to update structure");
+    const errorMessage = error.response?.data?.detail || 'Failed to update structure';
+    toast.error(errorMessage);
+  } finally {
+    setSubmitting(false);
   }
 };
 
@@ -143,9 +162,23 @@ alert("You cannot payroll containing employees")
 
  const handleCreateStructure = async (e) => {
   e.preventDefault();
+  if (submitting) return; // Prevent multiple submissions
+  
+  // Check for duplicate name (case-insensitive)
+  const trimmedName = structureForm.name.trim();
+  const duplicateExists = structures.some(
+    structure => structure.name.toLowerCase().trim() === trimmedName.toLowerCase()
+  );
+  
+  if (duplicateExists) {
+    toast.error('A payroll structure with this name already exists. Please use a different name.');
+    return;
+  }
+  
+  setSubmitting(true);
   try {
     await api.post('/payroll-structures', {
-      name: structureForm.name,
+      name: trimmedName,
       salary_types: structureForm.salary_types.map(item => ({
         type: item.type,
         amount: Number(item.amount)
@@ -158,12 +191,17 @@ alert("You cannot payroll containing employees")
     fetchData();
     setStructureDialog(false);
   } catch (error) {
-    toast.error('Failed to create payroll structure');
+    const errorMessage = error.response?.data?.detail || 'Failed to create payroll structure';
+    toast.error(errorMessage);
+  } finally {
+    setSubmitting(false);
   }
 };
 
   const handleAssignPayroll = async (e) => {
   e.preventDefault();
+  if (submitting) return; // Prevent multiple submissions
+  setSubmitting(true);
   try {
     await api.post('/payroll', assignForm);
 
@@ -177,16 +215,21 @@ alert("You cannot payroll containing employees")
     fetchData();   // this reloads payroll-structures with updated employee_count
   } catch (error) {
     toast.error(error.response?.data?.detail || 'Failed to assign payroll');
+  } finally {
+    setSubmitting(false);
   }
 };
 
   const handleGeneratePayslip = async (e) => {
     e.preventDefault();
+    if (submitting) return; // Prevent multiple submissions
+    setSubmitting(true);
     try {
       // Validate month format (should be YYYY-MM)
       const monthValue = payslipForm.month;
       if (!monthValue || !/^\d{4}-\d{2}$/.test(monthValue)) {
         toast.error('Please select a valid month (YYYY-MM format)');
+        setSubmitting(false);
         return;
       }
       
@@ -199,6 +242,8 @@ alert("You cannot payroll containing employees")
       const errorMessage = error.response?.data?.detail || 'Failed to generate payslip';
       toast.error(errorMessage);
       console.error('Payslip generation error:', error);
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -314,8 +359,8 @@ alert("You cannot payroll containing employees")
     </div>
   ))}
 
-  <Button type="submit" className="w-full">
-    Create Payroll
+  <Button type="submit" className="w-full" disabled={submitting}>
+    {submitting ? 'Creating...' : 'Create Payroll'}
   </Button>
 </form>
               </DialogContent>
@@ -388,7 +433,9 @@ alert("You cannot payroll containing employees")
     </div>
   ))}
          
-      <Button type="submit" className="w-full">Update Structure</Button>
+      <Button type="submit" className="w-full" disabled={submitting}>
+        {submitting ? 'Updating...' : 'Update Structure'}
+      </Button>
     </form>
   </DialogContent>
 </Dialog>
@@ -511,8 +558,13 @@ alert("You cannot payroll containing employees")
                         </SelectContent>
                       </Select>
                     </div>
-                    <Button type="submit" className="w-full bg-zinc-900 hover:bg-zinc-800" data-testid="submit-assign-button">
-                      Assign Payroll
+                    <Button 
+                      type="submit" 
+                      className="w-full bg-zinc-900 hover:bg-zinc-800" 
+                      data-testid="submit-assign-button"
+                      disabled={submitting}
+                    >
+                      {submitting ? 'Assigning...' : 'Assign Payroll'}
                     </Button>
                   </form>
                 </DialogContent>
@@ -579,8 +631,13 @@ alert("You cannot payroll containing employees")
                         required
                       />
                     </div>
-                    <Button type="submit" className="w-full bg-zinc-900 hover:bg-zinc-800" data-testid="submit-payslip-button">
-                      Generate Payslip
+                    <Button 
+                      type="submit" 
+                      className="w-full bg-zinc-900 hover:bg-zinc-800" 
+                      data-testid="submit-payslip-button"
+                      disabled={submitting}
+                    >
+                      {submitting ? 'Generating...' : 'Generate Payslip'}
                     </Button>
                   </form>
                 </DialogContent>

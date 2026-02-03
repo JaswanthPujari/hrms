@@ -27,6 +27,7 @@ export default function DepartmentManagement() {
   const [open, setOpen] = useState(false);
   const [editDept, setEditDept] = useState(null);
   const [formData, setFormData] = useState({ name: '', description: '' });
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     fetchDepartments();
@@ -43,20 +44,48 @@ export default function DepartmentManagement() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (submitting) return; // Prevent multiple submissions
+    
+    // Check for duplicate name (case-insensitive)
+    const trimmedName = formData.name.trim();
+    const duplicateExists = editDept
+      ? departments.some(
+          dept => dept.id !== editDept.id && 
+                  dept.name.toLowerCase().trim() === trimmedName.toLowerCase()
+        )
+      : departments.some(
+          dept => dept.name.toLowerCase().trim() === trimmedName.toLowerCase()
+        );
+    
+    if (duplicateExists) {
+      toast.error('A department with this name already exists. Please use a different name.');
+      return;
+    }
+    
+    setSubmitting(true);
     try {
       if (editDept) {
-        await api.put(`/departments/${editDept.id}`, formData);
+        await api.put(`/departments/${editDept.id}`, {
+          name: trimmedName,
+          description: formData.description
+        });
         toast.success('Department updated');
       } else {
-        await api.post('/departments', formData);
+        await api.post('/departments', {
+          name: trimmedName,
+          description: formData.description
+        });
         toast.success('Department created');
       }
       setFormData({ name: '', description: '' });
       setEditDept(null);
       setOpen(false);
       fetchDepartments();
-    } catch {
-      toast.error('Operation failed');
+    } catch (error) {
+      const errorMessage = error.response?.data?.detail || 'Operation failed';
+      toast.error(errorMessage);
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -114,8 +143,10 @@ export default function DepartmentManagement() {
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 />
               </div>
-              <Button type="submit" className="w-full">
-                {editDept ? "Update" : "Create"}
+              <Button type="submit" className="w-full" disabled={submitting}>
+                {submitting 
+                  ? (editDept ? "Updating..." : "Creating...") 
+                  : (editDept ? "Update" : "Create")}
               </Button>
             </form>
           </DialogContent>
