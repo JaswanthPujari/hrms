@@ -8,30 +8,47 @@ const api = axios.create({
   baseURL: API_URL,
 });
 
-// Utility function to decode JWT token and check expiration
-export const isTokenExpired = (token) => {
-  if (!token) return true;
+// Flag to prevent multiple simultaneous refresh attempts
+let isRefreshing = false;
+let failedQueue = [];
+
+const processQueue = (error, token = null) => {
+  failedQueue.forEach(prom => {
+    if (error) {
+      prom.reject(error);
+    } else {
+      prom.resolve(token);
+    }
+  });
   
+  failedQueue = [];
+};
+
+// Function to refresh access token
+const refreshAccessToken = async () => {
+  const refreshToken = localStorage.getItem('refresh_token');
+  if (!refreshToken) {
+    throw new Error('No refresh token available');
+  }
+
   try {
-    // JWT tokens have 3 parts separated by dots: header.payload.signature
-    const parts = token.split('.');
-    if (parts.length !== 3) return true;
+    const response = await axios.post(`${API_URL}/auth/refresh`, {
+      refresh_token: refreshToken
+    });
     
-    // Decode the payload (second part)
-    const payload = JSON.parse(atob(parts[1]));
+    const { access_token, refresh_token: newRefreshToken } = response.data;
+    localStorage.setItem('token', access_token);
+    if (newRefreshToken) {
+      localStorage.setItem('refresh_token', newRefreshToken);
+    }
     
-    // Check if token has expiration claim
-    if (!payload.exp) return true;
-    
-    // exp is in seconds, Date.now() is in milliseconds
-    const expirationTime = payload.exp * 1000;
-    const currentTime = Date.now();
-    
-    // Return true if token is expired (with 5 second buffer to account for clock skew)
-    return currentTime >= (expirationTime - 5000);
+    return access_token;
   } catch (error) {
-    // If we can't decode the token, consider it expired
-    return true;
+    // Refresh token is invalid or expired
+    localStorage.removeItem('token');
+    localStorage.removeItem('refresh_token');
+    localStorage.removeItem('user');
+    throw error;
   }
 };
 
@@ -40,6 +57,7 @@ export const logoutUser = () => {
   const currentPath = window.location.pathname;
   if (currentPath !== '/login' && !currentPath.startsWith('/login')) {
     localStorage.removeItem('token');
+    localStorage.removeItem('refresh_token');
     localStorage.removeItem('user');
     toast.error('Your session has expired. Please log in again.');
     window.location.href = '/login';
@@ -50,11 +68,6 @@ api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
     if (token) {
-      // Check if token is expired before making the request
-      if (isTokenExpired(token)) {
-        logoutUser();
-        return Promise.reject(new Error('Token expired'));
-      }
       config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
@@ -64,28 +77,54 @@ api.interceptors.request.use(
   }
 );
 
-// Response interceptor to handle token expiration
+// Response interceptor to handle token expiration and automatic refresh
 api.interceptors.response.use(
   (response) => {
     return response;
   },
-  (error) => {
+  async (error) => {
+    const originalRequest = error.config;
+
     // Handle 401 Unauthorized errors (token expired or invalid)
-    if (error.response?.status === 401) {
-      // Only handle if not already on login page to avoid infinite redirects
-      const currentPath = window.location.pathname;
-      if (currentPath !== '/login' && !currentPath.startsWith('/login')) {
-        // Clear authentication data
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        
-        // Show user-friendly message
-        toast.error('Your session has expired. Please log in again.');
-        
-        // Redirect to login page
-        window.location.href = '/login';
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      // Skip refresh for login/register/refresh endpoints
+      if (originalRequest.url?.includes('/auth/login') || 
+          originalRequest.url?.includes('/auth/register') ||
+          originalRequest.url?.includes('/auth/refresh')) {
+        return Promise.reject(error);
+      }
+
+      // If we're already refreshing, queue this request
+      if (isRefreshing) {
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ resolve, reject });
+        })
+          .then(token => {
+            originalRequest.headers.Authorization = `Bearer ${token}`;
+            return api(originalRequest);
+          })
+          .catch(err => {
+            return Promise.reject(err);
+          });
+      }
+
+      originalRequest._retry = true;
+      isRefreshing = true;
+
+      try {
+        const newToken = await refreshAccessToken();
+        processQueue(null, newToken);
+        originalRequest.headers.Authorization = `Bearer ${newToken}`;
+        return api(originalRequest);
+      } catch (refreshError) {
+        processQueue(refreshError, null);
+        logoutUser();
+        return Promise.reject(refreshError);
+      } finally {
+        isRefreshing = false;
       }
     }
+
     return Promise.reject(error);
   }
 );

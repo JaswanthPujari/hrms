@@ -31,7 +31,8 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 security = HTTPBearer()
 SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key-change-in-production")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 hours
+ACCESS_TOKEN_EXPIRE_MINUTES = 15  # 15 minutes - short-lived access token
+REFRESH_TOKEN_EXPIRE_DAYS = 30  # 30 days - long-lived refresh token
 
 # Create the main app
 app = FastAPI()
@@ -61,8 +62,12 @@ class UserLogin(BaseModel):
     email: EmailStr
     password: str
 
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
+
 class Token(BaseModel):
     access_token: str
+    refresh_token: str
     token_type: str
     user: User
 
@@ -245,6 +250,13 @@ def create_access_token(data: dict):
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
+def create_refresh_token(data: dict):
+    to_encode = data.copy()
+    expire = datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+    to_encode.update({"exp": expire, "type": "refresh"})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -302,9 +314,10 @@ async def register(user_data: UserCreate):
                 {"$set": {"user_id": user.id}}
             )
     
-    # Create token
+    # Create tokens
     access_token = create_access_token(data={"sub": user.id, "role": user.role})
-    return Token(access_token=access_token, token_type="bearer", user=user)
+    refresh_token = create_refresh_token(data={"sub": user.id, "role": user.role})
+    return Token(access_token=access_token, refresh_token=refresh_token, token_type="bearer", user=user)
 
 @api_router.post("/auth/login", response_model=Token)
 async def login(credentials: UserLogin):
@@ -317,7 +330,45 @@ async def login(credentials: UserLogin):
     
     user = User(**user_doc)
     access_token = create_access_token(data={"sub": user.id, "role": user.role})
-    return Token(access_token=access_token, token_type="bearer", user=user)
+    refresh_token = create_refresh_token(data={"sub": user.id, "role": user.role})
+    return Token(access_token=access_token, refresh_token=refresh_token, token_type="bearer", user=user)
+
+@api_router.post("/auth/refresh", response_model=Token)
+async def refresh_token(refresh_token_data: RefreshTokenRequest):
+    """Refresh access token using refresh token"""
+    refresh_token = refresh_token_data.refresh_token
+    if not refresh_token:
+        raise HTTPException(status_code=401, detail="Refresh token required")
+    
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate refresh token",
+    )
+    
+    try:
+        payload = jwt.decode(refresh_token, SECRET_KEY, algorithms=[ALGORITHM])
+        # Verify it's a refresh token
+        if payload.get("type") != "refresh":
+            raise credentials_exception
+        
+        user_id: str = payload.get("sub")
+        if user_id is None:
+            raise credentials_exception
+    except JWTError:
+        raise credentials_exception
+    
+    # Get user
+    user_doc = await db.users.find_one({"id": user_id}, {"_id": 0})
+    if user_doc is None:
+        raise credentials_exception
+    
+    user = User(**user_doc)
+    
+    # Generate new tokens
+    access_token = create_access_token(data={"sub": user.id, "role": user.role})
+    new_refresh_token = create_refresh_token(data={"sub": user.id, "role": user.role})
+    
+    return Token(access_token=access_token, refresh_token=new_refresh_token, token_type="bearer", user=user)
 
 @api_router.get("/auth/me", response_model=User)
 async def get_me(current_user: User = Depends(get_current_user)):
