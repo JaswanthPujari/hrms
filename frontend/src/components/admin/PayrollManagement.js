@@ -997,24 +997,57 @@ alert("You cannot payroll containing employees")
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-3">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-zinc-600">Basic Salary</span>
-                        <span className="font-medium text-zinc-900">
-                          ₹{payslip.basic_salary.toFixed(2)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-zinc-600">Allowances</span>
-                        <span className="font-medium text-green-600">
-                          +₹{payslip.allowances.toFixed(2)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-zinc-600">Deductions</span>
-                        <span className="font-medium text-red-600">
-                          -₹{payslip.deductions.toFixed(2)}
-                        </span>
-                      </div>
+                      {payslip.salary_types && payslip.salary_types.length > 0 ? (
+                        <>
+                          {/* Display individual salary types from payroll structure */}
+                          {payslip.salary_types
+                            .filter(st => st.category === 'earnings')
+                            .map((salaryType, idx) => (
+                              <div key={`earning-${idx}`} className="flex justify-between text-sm">
+                                <span className="text-zinc-600">{salaryType.type}</span>
+                                <span className="font-medium text-green-600">
+                                  +₹{Math.abs(salaryType.amount).toFixed(2)}
+                                </span>
+                              </div>
+                            ))}
+                          {payslip.salary_types
+                            .filter(st => st.category === 'deductions')
+                            .map((salaryType, idx) => (
+                              <div key={`deduction-${idx}`} className="flex justify-between text-sm">
+                                <span className="text-zinc-600">{salaryType.type}</span>
+                                <span className="font-medium text-red-600">
+                                  -₹{Math.abs(salaryType.amount).toFixed(2)}
+                                </span>
+                              </div>
+                            ))}
+                        </>
+                      ) : (
+                        <>
+                          {/* Fallback to aggregated values for backward compatibility */}
+                          <div className="flex justify-between text-sm">
+                            <span className="text-zinc-600">Basic Salary</span>
+                            <span className="font-medium text-zinc-900">
+                              ₹{payslip.basic_salary.toFixed(2)}
+                            </span>
+                          </div>
+                          {payslip.allowances > 0 && (
+                            <div className="flex justify-between text-sm">
+                              <span className="text-zinc-600">Allowances</span>
+                              <span className="font-medium text-green-600">
+                                +₹{payslip.allowances.toFixed(2)}
+                              </span>
+                            </div>
+                          )}
+                          {payslip.deductions > 0 && (
+                            <div className="flex justify-between text-sm">
+                              <span className="text-zinc-600">Deductions</span>
+                              <span className="font-medium text-red-600">
+                                -₹{payslip.deductions.toFixed(2)}
+                              </span>
+                            </div>
+                          )}
+                        </>
+                      )}
                       <div className="pt-3 border-t border-zinc-200">
                         <div className="flex justify-between">
                           <span className="font-semibold text-zinc-900">Net Pay</span>

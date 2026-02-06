@@ -152,6 +152,7 @@ class Payslip(BaseModel):
     allowances: float
     deductions: float
     net_pay: float
+    salary_types: List[SalaryType] = []  # Store individual salary types from payroll structure
     generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class PayslipCreate(BaseModel):
@@ -778,6 +779,49 @@ async def preview_print_format(format_id: str, admin: User = Depends(get_admin_u
 
 # ============= PAYSLIP ROUTES =============
 
+async def get_last_working_day_of_month(year: int, month: int) -> datetime:
+    """Calculate the last working day of a given month (excluding weekends and holidays)"""
+    # Get the last day of the month
+    if month == 12:
+        last_day = datetime(year, month, 31, tzinfo=timezone.utc)
+    else:
+        # First day of next month, minus one day
+        next_month = datetime(year, month + 1, 1, tzinfo=timezone.utc)
+        last_day = next_month - timedelta(days=1)
+    
+    # Get all holidays from database
+    holidays = await db.holidays.find({}, {"_id": 0}).to_list(1000)
+    holiday_dates = {holiday["date"] for holiday in holidays}
+    
+    # Get first day of the month as safety limit
+    first_day = datetime(year, month, 1, tzinfo=timezone.utc).date()
+    
+    # Start from the last day and go backwards until we find a working day
+    current_date = last_day.date()
+    max_iterations = 31  # Safety limit to prevent infinite loops
+    
+    iteration = 0
+    while iteration < max_iterations and current_date >= first_day:
+        iteration += 1
+        
+        # Check if it's a weekend (Monday=0, Sunday=6, Saturday=5)
+        weekday = current_date.weekday()
+        if weekday >= 5:  # Saturday or Sunday
+            current_date -= timedelta(days=1)
+            continue
+        
+        # Check if it's a holiday
+        date_str = current_date.strftime("%Y-%m-%d")
+        if date_str in holiday_dates:
+            current_date -= timedelta(days=1)
+            continue
+        
+        # Found a working day
+        return datetime.combine(current_date, datetime.min.time(), tzinfo=timezone.utc)
+    
+    # Fallback: if we couldn't find a working day, return the last day of the month
+    return last_day
+
 @api_router.post("/payslips/generate", response_model=Payslip)
 async def generate_payslip(payslip_data: PayslipCreate, admin: User = Depends(get_admin_user)):
     # Get employee
@@ -852,15 +896,39 @@ async def generate_payslip(payslip_data: PayslipCreate, admin: User = Depends(ge
     # Calculate net pay
     net_pay = basic_salary + allowances - deductions
     
+    # Store individual salary types from payroll structure
+    salary_types_list = []
+    for salary_type in salary_types:
+        if isinstance(salary_type, dict):
+            salary_types_list.append(SalaryType(
+                type=salary_type.get("type", ""),
+                amount=float(salary_type.get("amount", 0)),
+                category=salary_type.get("category", "earnings")
+            ))
+        else:
+            salary_types_list.append(salary_type)
+    
+    # Calculate the last working day of the payslip month
+    # Parse month string (format: YYYY-MM)
+    try:
+        year, month = map(int, payslip_data.month.split("-"))
+        last_working_day = await get_last_working_day_of_month(year, month)
+    except (ValueError, IndexError):
+        # Fallback to current date if month format is invalid
+        last_working_day = datetime.now(timezone.utc)
+    
     payslip = Payslip(
         employee_id=payslip_data.employee_id,
         month=payslip_data.month,
         basic_salary=basic_salary,
         allowances=allowances,
         deductions=deductions,
-        net_pay=net_pay
+        net_pay=net_pay,
+        salary_types=salary_types_list,
+        generated_at=last_working_day
     )
     payslip_dict = payslip.model_dump()
+    payslip_dict["salary_types"] = [st.model_dump() for st in salary_types_list]
     payslip_dict["generated_at"] = payslip_dict["generated_at"].isoformat()
     
     await db.payslips.insert_one(payslip_dict)
@@ -892,6 +960,12 @@ async def list_payslips(current_user: User = Depends(get_current_user)):
     for ps in payslips:
         if isinstance(ps.get("generated_at"), str):
             ps["generated_at"] = datetime.fromisoformat(ps["generated_at"])
+        # Ensure salary_types is a list (handle backward compatibility)
+        if "salary_types" not in ps:
+            ps["salary_types"] = []
+        elif ps["salary_types"] and len(ps["salary_types"]) > 0 and isinstance(ps["salary_types"][0], dict):
+            # Convert dicts to SalaryType objects for proper serialization
+            ps["salary_types"] = [SalaryType(**st) if isinstance(st, dict) else st for st in ps["salary_types"]]
     return sorted(payslips, key=lambda x: x["month"], reverse=True)
 
 @api_router.get("/payslips/employee/{employee_id}", response_model=List[Payslip])
@@ -918,6 +992,12 @@ async def get_employee_payslips(employee_id: str, current_user: User = Depends(g
     for ps in payslips:
         if isinstance(ps.get("generated_at"), str):
             ps["generated_at"] = datetime.fromisoformat(ps["generated_at"])
+        # Ensure salary_types is a list (handle backward compatibility)
+        if "salary_types" not in ps:
+            ps["salary_types"] = []
+        elif ps["salary_types"] and len(ps["salary_types"]) > 0 and isinstance(ps["salary_types"][0], dict):
+            # Convert dicts to SalaryType objects for proper serialization
+            ps["salary_types"] = [SalaryType(**st) if isinstance(st, dict) else st for st in ps["salary_types"]]
     return sorted(payslips, key=lambda x: x["month"], reverse=True)
 
 @api_router.delete("/payslips/{payslip_id}")
@@ -989,6 +1069,16 @@ async def download_payslip(payslip_id: str, format_id: Optional[str] = None, cur
             elif employee.get("department"):
                 department_name = employee["department"]
             
+            # Get salary_types from payslip, fallback to payroll structure if not stored
+            salary_types = payslip.get("salary_types", [])
+            if not salary_types:
+                # Fallback: get from payroll structure
+                payroll = await db.payroll.find_one({"employee_id": payslip["employee_id"]}, {"_id": 0})
+                if payroll:
+                    structure = await db.payroll_structures.find_one({"id": payroll["payroll_structure_id"]}, {"_id": 0})
+                    if structure:
+                        salary_types = structure.get("salary_types", [])
+            
             html_content = template.render(
                 employee_name=employee["name"],
                 employee_id=employee.get("employee_id", "N/A"),
@@ -999,6 +1089,7 @@ async def download_payslip(payslip_id: str, format_id: Optional[str] = None, cur
                 allowances=payslip["allowances"],
                 deductions=payslip["deductions"],
                 net_pay=payslip["net_pay"],
+                salary_types=salary_types,  # Pass individual salary types to template
                 generated_date=datetime.fromisoformat(payslip["generated_at"]).strftime("%B %d, %Y") if isinstance(payslip["generated_at"], str) else payslip["generated_at"].strftime("%B %d, %Y")
             )
             
@@ -1006,6 +1097,49 @@ async def download_payslip(payslip_id: str, format_id: Optional[str] = None, cur
             raise HTTPException(status_code=500, detail=f"Template rendering error: {str(e)}")
     else:
         # Fallback to simple default format
+        # Get salary_types from payslip, fallback to payroll structure if not stored
+        salary_types = payslip.get("salary_types", [])
+        if not salary_types:
+            # Fallback: get from payroll structure
+            payroll = await db.payroll.find_one({"employee_id": payslip["employee_id"]}, {"_id": 0})
+            if payroll:
+                structure = await db.payroll_structures.find_one({"id": payroll["payroll_structure_id"]}, {"_id": 0})
+                if structure:
+                    salary_types = structure.get("salary_types", [])
+        
+        # Build earnings and deductions rows from salary_types
+        earnings_rows = ""
+        deductions_rows = ""
+        total_earnings = 0.0
+        total_deductions = 0.0
+        
+        if salary_types:
+            for st in salary_types:
+                if isinstance(st, dict):
+                    type_name = st.get("type", "")
+                    amount = float(st.get("amount", 0))
+                    category = st.get("category", "earnings")
+                else:
+                    type_name = getattr(st, "type", "")
+                    amount = float(getattr(st, "amount", 0))
+                    category = getattr(st, "category", "earnings")
+                
+                if category == "deductions":
+                    deductions_rows += f'<tr><td>{type_name}</td><td style="text-align: right;">-₹{abs(amount):.2f}</td></tr>'
+                    total_deductions += abs(amount)
+                else:
+                    earnings_rows += f'<tr><td>{type_name}</td><td style="text-align: right;">₹{amount:.2f}</td></tr>'
+                    total_earnings += amount
+        else:
+            # Fallback to aggregated values if salary_types not available
+            earnings_rows = f'<tr><td>Basic Salary</td><td style="text-align: right;">₹{payslip["basic_salary"]:.2f}</td></tr>'
+            if payslip["allowances"] > 0:
+                earnings_rows += f'<tr><td>Allowances</td><td style="text-align: right;">₹{payslip["allowances"]:.2f}</td></tr>'
+            total_earnings = payslip["basic_salary"] + payslip["allowances"]
+            if payslip["deductions"] > 0:
+                deductions_rows = f'<tr><td>Deductions</td><td style="text-align: right;">-₹{payslip["deductions"]:.2f}</td></tr>'
+                total_deductions = payslip["deductions"]
+        
         html_content = f"""
         <!DOCTYPE html>
         <html>
@@ -1054,21 +1188,11 @@ async def download_payslip(payslip_id: str, format_id: Optional[str] = None, cur
                     <th>Description</th>
                     <th style="text-align: right;">Amount (₹)</th>
                 </tr>
-                <tr>
-                    <td>Basic Salary</td>
-                    <td style="text-align: right;">₹{payslip["basic_salary"]:.2f}</td>
-                </tr>
-                <tr>
-                    <td>Allowances</td>
-                    <td style="text-align: right;">₹{payslip["allowances"]:.2f}</td>
-                </tr>
-                <tr>
-                    <td>Deductions</td>
-                    <td style="text-align: right;">-₹{payslip["deductions"]:.2f}</td>
-                </tr>
+                {earnings_rows}
+                {deductions_rows}
                 <tr class="total-row">
                     <td>Net Pay</td>
-                    <td style="text-align: right;">₹{payslip["net_pay"]:.2f}</td>
+                    <td style="text-align: right;">₹{total_earnings - total_deductions:.2f}</td>
                 </tr>
             </table>
         </body>
