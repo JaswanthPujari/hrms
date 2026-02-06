@@ -340,6 +340,18 @@ alert("You cannot payroll containing employees")
     return emp ? emp.name : 'Unknown';
   };
 
+  const handleDeletePayslip = async (payslipId) => {
+    if (!confirm("Are you sure you want to delete this payslip?")) return;
+    
+    try {
+      await api.delete(`/payslips/${payslipId}`);
+      toast.success('Payslip deleted successfully');
+      fetchData(); // Refresh the payslips list
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to delete payslip');
+    }
+  };
+
   if (loading) {
     return <div className="text-zinc-600">Loading...</div>;
   }
@@ -936,40 +948,51 @@ alert("You cannot payroll containing employees")
                           {new Date(payslip.generated_at).toLocaleDateString()}
                         </CardDescription>
                       </div>
-                      <Button
-                        onClick={async () => {
-                          try {
-                            const response = await api.get(`/payslips/${payslip.id}/download`, {
-                              responseType: 'text',
-                            });
-                            
-                            // Open in new window and trigger print dialog
-                            const newWindow = window.open('', '_blank');
-                            if (newWindow) {
-                              newWindow.document.write(response.data);
-                              newWindow.document.close();
+                      <div className="flex gap-2">
+                        <Button
+                          onClick={async () => {
+                            try {
+                              const response = await api.get(`/payslips/${payslip.id}/download`, {
+                                responseType: 'text',
+                              });
                               
-                              // Wait for content to load, then trigger print
-                              setTimeout(() => {
-                                newWindow.print();
-                              }, 500);
-                              
-                              toast.success('Payslip opened for printing/download');
-                            } else {
-                              toast.error('Please allow popups to download payslip');
+                              // Open in new window and trigger print dialog
+                              const newWindow = window.open('', '_blank');
+                              if (newWindow) {
+                                newWindow.document.write(response.data);
+                                newWindow.document.close();
+                                
+                                // Wait for content to load, then trigger print
+                                setTimeout(() => {
+                                  newWindow.print();
+                                }, 500);
+                                
+                                toast.success('Payslip opened for printing/download');
+                              } else {
+                                toast.error('Please allow popups to download payslip');
+                              }
+                            } catch (error) {
+                              const errorMessage = error.response?.data?.detail || 'Failed to download payslip';
+                              toast.error(errorMessage);
                             }
-                          } catch (error) {
-                            const errorMessage = error.response?.data?.detail || 'Failed to download payslip';
-                            toast.error(errorMessage);
-                          }
-                        }}
-                        className="bg-zinc-900 hover:bg-zinc-800"
-                        size="sm"
-                        data-testid="download-payslip-button"
-                      >
-                        <Download className="h-4 w-4 mr-2" />
-                        Download PDF
-                      </Button>
+                          }}
+                          className="bg-zinc-900 hover:bg-zinc-800"
+                          size="sm"
+                          data-testid="download-payslip-button"
+                        >
+                          <Download className="h-4 w-4 mr-2" />
+                          Download PDF
+                        </Button>
+                        <Button
+                          onClick={() => handleDeletePayslip(payslip.id)}
+                          variant="destructive"
+                          size="sm"
+                          data-testid="delete-payslip-button"
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Delete
+                        </Button>
+                      </div>
                     </div>
                   </CardHeader>
                   <CardContent>

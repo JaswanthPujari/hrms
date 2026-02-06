@@ -920,6 +920,16 @@ async def get_employee_payslips(employee_id: str, current_user: User = Depends(g
             ps["generated_at"] = datetime.fromisoformat(ps["generated_at"])
     return sorted(payslips, key=lambda x: x["month"], reverse=True)
 
+@api_router.delete("/payslips/{payslip_id}")
+async def delete_payslip(payslip_id: str, admin: User = Depends(get_admin_user)):
+    """Delete a payslip - only admin can delete payslips"""
+    result = await db.payslips.delete_one({"id": payslip_id})
+    
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Payslip not found")
+    
+    return {"message": "Payslip deleted successfully"}
+
 @api_router.get("/payslips/{payslip_id}/download")
 async def download_payslip(payslip_id: str, format_id: Optional[str] = None, current_user: User = Depends(get_current_user)):
     from fastapi.responses import HTMLResponse
