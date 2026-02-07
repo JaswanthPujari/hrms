@@ -31,6 +31,7 @@ import api from '../../lib/api';
 export default function EmployeeManagement() {
   const [employees, setEmployees] = useState([]);
   const [departments, setDepartments] = useState([]);
+  const [policyAssignments, setPolicyAssignments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -49,17 +50,24 @@ export default function EmployeeManagement() {
 
   const fetchData = async () => {
     try {
-      const [employeesRes, departmentsRes] = await Promise.all([
+      const [employeesRes, departmentsRes, assignmentsRes] = await Promise.all([
         api.get('/employees'),
         api.get('/departments'),
+        api.get('/employee-policy-assignments').catch(() => ({ data: [] })), // Handle error gracefully
       ]);
       setEmployees(employeesRes.data);
       setDepartments(departmentsRes.data);
+      setPolicyAssignments(assignmentsRes.data || []);
     } catch (error) {
       toast.error('Failed to fetch data');
     } finally {
       setLoading(false);
     }
+  };
+
+  const getEmployeePolicy = (employeeId) => {
+    const assignment = policyAssignments.find(a => a.employee_id === employeeId);
+    return assignment?.policy?.name || null;
   };
 
   const handleSubmit = async (e) => {
@@ -405,6 +413,12 @@ export default function EmployeeManagement() {
                       </p>
                     </div>
                   )}
+                  <div>
+                    <p className="text-zinc-600">Leave Policy</p>
+                    <p className="font-medium text-zinc-900">
+                      {getEmployeePolicy(employee.id) || 'Not Assigned'}
+                    </p>
+                  </div>
                 </div>
               </CardContent>
             </Card>

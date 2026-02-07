@@ -1016,7 +1016,7 @@ alert("You cannot payroll containing employees")
                               <div key={`deduction-${idx}`} className="flex justify-between text-sm">
                                 <span className="text-zinc-600">{salaryType.type}</span>
                                 <span className="font-medium text-red-600">
-                                  -₹{Math.abs(salaryType.amount).toFixed(2)}
+                                  ₹{Math.abs(salaryType.amount).toFixed(2)}
                                 </span>
                               </div>
                             ))}
@@ -1042,7 +1042,7 @@ alert("You cannot payroll containing employees")
                             <div className="flex justify-between text-sm">
                               <span className="text-zinc-600">Deductions</span>
                               <span className="font-medium text-red-600">
-                                -₹{payslip.deductions.toFixed(2)}
+                                ₹{payslip.deductions.toFixed(2)}
                               </span>
                             </div>
                           )}

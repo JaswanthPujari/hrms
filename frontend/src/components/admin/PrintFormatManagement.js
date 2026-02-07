@@ -149,7 +149,7 @@ const DEFAULT_TEMPLATE = `<!DOCTYPE html>
         </tr>
         <tr>
             <td>Deductions</td>
-            <td style="text-align: right;">-₹{{ "%.2f"|format(deductions) }}</td>
+            <td style="text-align: right;">₹{{ "%.2f"|format(deductions) }}</td>
         </tr>
         <tr class="total-row">
             <td>Net Salary</td>

@@ -1125,7 +1125,7 @@ async def download_payslip(payslip_id: str, format_id: Optional[str] = None, cur
                     category = getattr(st, "category", "earnings")
                 
                 if category == "deductions":
-                    deductions_rows += f'<tr><td>{type_name}</td><td style="text-align: right;">-₹{abs(amount):.2f}</td></tr>'
+                    deductions_rows += f'<tr><td>{type_name}</td><td style="text-align: right;">₹{abs(amount):.2f}</td></tr>'
                     total_deductions += abs(amount)
                 else:
                     earnings_rows += f'<tr><td>{type_name}</td><td style="text-align: right;">₹{amount:.2f}</td></tr>'
@@ -1137,7 +1137,7 @@ async def download_payslip(payslip_id: str, format_id: Optional[str] = None, cur
                 earnings_rows += f'<tr><td>Allowances</td><td style="text-align: right;">₹{payslip["allowances"]:.2f}</td></tr>'
             total_earnings = payslip["basic_salary"] + payslip["allowances"]
             if payslip["deductions"] > 0:
-                deductions_rows = f'<tr><td>Deductions</td><td style="text-align: right;">-₹{payslip["deductions"]:.2f}</td></tr>'
+                deductions_rows = f'<tr><td>Deductions</td><td style="text-align: right;">₹{payslip["deductions"]:.2f}</td></tr>'
                 total_deductions = payslip["deductions"]
         
         html_content = f"""
@@ -1369,6 +1369,32 @@ async def get_employee_policy_assignment(employee_id: str, current_user: User = 
         }
     
     return assignment
+
+@api_router.get("/employee-policy-assignments")
+async def list_employee_policy_assignments(admin: User = Depends(get_admin_user)):
+    """Get all employee policy assignments with policy details"""
+    assignments = await db.employee_policy_assignments.find({}, {"_id": 0}).to_list(1000)
+    
+    result = []
+    for assignment in assignments:
+        if isinstance(assignment.get("created_at"), str):
+            assignment["created_at"] = datetime.fromisoformat(assignment["created_at"])
+        
+        # Get the full policy details
+        policy = await db.leave_policies.find_one({"id": assignment["leave_policy_id"]}, {"_id": 0})
+        if policy:
+            if isinstance(policy.get("created_at"), str):
+                policy["created_at"] = datetime.fromisoformat(policy["created_at"])
+            if "leave_types" in policy:
+                policy["leave_types"] = [LeaveType(**lt) if isinstance(lt, dict) else lt for lt in policy["leave_types"]]
+            result.append({
+                **assignment,
+                "policy": policy
+            })
+        else:
+            result.append(assignment)
+    
+    return result
 
 # ============= LEAVE REQUEST ROUTES =============
 
